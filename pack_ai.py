@@ -174,13 +174,30 @@ def scan_file_for_secrets(path: Path) -> list[str]:
         return ["No se pudo decodificar el archivo para escaneo"]
 
     findings = []
+    
+    # Función auxiliar para calcular línea
+    def get_line_no(text, pos):
+        return text.count("\n", 0, pos) + 1
+
     for name, p in SECRET_PATTERNS.items():
-        if match := p.search(content):
-            findings.append(f"{name}: {mask_secret(match.group(0))}")
+        for match in p.finditer(content):
+            line = get_line_no(content, match.start())
+            findings.append({
+                "type": name,
+                "secret": mask_secret(match.group(0)),
+                "line": line
+            })
     
     for name, p in SENSITIVE_ASSIGNMENT_PATTERNS.items():
-        if match := p.search(content):
-            findings.append(f"{name}: {mask_secret(match.group(0))}")
+        # Para evitar duplicados si ya se encontró un token específico en esa zona
+        if any(f["type"] == name for f in findings): continue
+        for match in p.finditer(content):
+            line = get_line_no(content, match.start())
+            findings.append({
+                "type": name,
+                "secret": mask_secret(match.group(0)),
+                "line": line
+            })
     
     return findings
 
@@ -253,7 +270,11 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 # 4. Escaneo normal
                 f_findings = scan_file_for_secrets(path)
                 if f_findings:
-                    findings.append(f"SALTADO ({', '.join(f_findings)}): {rel}")
+                    findings.append({
+                        "rel": rel,
+                        "details": f_findings,
+                        "reason": "secret_found"
+                    })
                     ign += 1; continue
 
                 zipf.write(path, arcname=rel)
@@ -283,8 +304,15 @@ def main():
     pass_patterns = load_aipass(root)
     print(f"Empaquetando: {root.name}...")
     
-    incl, ign, findings = create_zip(root, out_zip, ignore_patterns, pass_patterns, args.include_env_example)
-    for f in findings: print(f"⚠️  {f}")
+    incl, ign, total_findings = create_zip(root, out_zip, ignore_patterns, pass_patterns, args.include_env_example)
+    
+    for f in total_findings:
+        print(f"⚠️  Excluido: {f['rel']}")
+        for d in f['details']:
+            print(f"    Tipo: {d['type']}")
+            if d.get('line'): print(f"    Línea: {d['line']}")
+            print(f"    Secreto: {d['secret']}")
+        print(f"    Acción: omitido del ZIP\n")
 
     copy_res = copy_zip(out_zip, args.copy)
     

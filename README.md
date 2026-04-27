@@ -36,14 +36,23 @@ uv sync
 ## 🛠️ Uso
 
 ```bash
-uv run python pack_ai.py <ruta_del_proyecto>
+uv run python pack_ai.py [opciones] <ruta_del_proyecto>
 ```
 
-### Opciones de Copiado
+> [!IMPORTANT]
+> **Orden de los argumentos**: Para soportar rutas con espacios sin necesidad de comillas, todas las opciones (como `--copy` o `--output`) deben escribirse **antes** de la ruta del proyecto. Cualquier cosa escrita después de la ruta será considerada parte del nombre de la carpeta.
 
-- `--copy file` (Por defecto): Copia el archivo ZIP.
-- `--copy path`: Copia la ruta absoluta.
-- `--copy none`: No copia nada.
+### Ejemplos
+
+```bash
+# Uso básico
+uv run python pack_ai.py C:\Proyectos\Mi App Increible
+
+# Con opciones (antes de la ruta)
+uv run python pack_ai.py --copy path --output backup.zip C:\Proyectos\Mi App
+```
+
+### Opciones disponibles
 
 ## 🛡️ Seguridad y Limitaciones
 
