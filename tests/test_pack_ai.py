@@ -109,12 +109,11 @@ def test_sanitize_filename_strip_underscores():
     assert sanitize_filename("a__b--c..d") == "a_b--c..d"
 
 def test_windows_reserved_names_mitigation():
-    """Verifica que nombres reservados sean sanitizados (aunque el .zip ayuda)."""
-    # Aunque no los renombramos explícitamente a algo distinto de NUL, 
-    # la extensión .zip suele evitar el problema en Windows.
-    # Aquí solo verificamos que no se rompa la sanitización básica.
-    assert sanitize_filename("CON") == "CON"
-    assert sanitize_filename("aux.py") == "aux.py"
+    """Verifica que nombres reservados sean mitigados con un guion bajo al inicio."""
+    assert sanitize_filename("CON") == "_CON"
+    assert sanitize_filename("aux.py") == "_aux.py"
+    assert sanitize_filename("com1") == "_com1"
+    assert sanitize_filename("LPT9") == "_LPT9"
 
 def test_get_git_commit_info_success():
     """Verifica la obtención de info de git con mock."""

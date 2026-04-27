@@ -362,6 +362,18 @@ def sanitize_filename(name: str) -> str:
     sanitized = re.sub(r'[^a-zA-Z0-9.\-_]', "_", name)
     # Limpiar guiones bajos consecutivos
     sanitized = re.sub(r'_{2,}', "_", sanitized).strip("_")
+    
+    # Mitigación para nombres reservados en Windows
+    windows_reserved = {
+        "CON", "PRN", "AUX", "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }
+    # Comprobar el nombre base (stem)
+    stem = Path(sanitized).stem.upper()
+    if stem in windows_reserved:
+        sanitized = f"_{sanitized}"
+        
     return sanitized
 
 def main():
