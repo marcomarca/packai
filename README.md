@@ -38,22 +38,24 @@ packai
 # Empaquetar una ruta específica
 packai C:\Ruta\De\Mi\Proyecto
 
-# Opciones avanzadas (deben ir antes de la ruta)
+# El orden de las opciones es flexible
 packai --copy path --output mi_respaldo.zip .
+packai . --copy path --output mi_respaldo.zip
 ```
 
 ### Opciones disponibles
 
 | Opción | Valores | Descripción |
 |---|---|---|
+| `--version`, `-v` | | Muestra la versión actual del script. |
 | `--copy` | `file`, `path`, `none` | Qué se copia al portapapeles (por defecto: `file`). |
-| `--output` | `[ruta]` | Ruta del ZIP generado (por defecto: `../nombre.zip`). |
+| `--output` | `[ruta]` | Ruta del ZIP generado. Por defecto se nombra como `[Proyecto]-[Commit]-[Hash].zip`. |
 | `--no-env-example` | (flag) | Si se activa, excluye archivos `.env.example` y similares. |
 
 ## ⚙️ Configuración Personalizada
 
-- **`.aiignore`**: Funciona como un `.gitignore`. Lo que pongas aquí no entrará en el ZIP.
-- **`.aipass`**: Archivos que quieres incluir en el ZIP pero que **no quieres que sean escaneados** (útil para archivos con claves falsas de test que el escáner bloquea por error).
+- **`.aiignore`**: Permite definir patrones de exclusión simples (tipo `fnmatch`). Lo que coincida no entrará en el ZIP.
+- **`.aipass`**: Archivos que quieres incluir en el ZIP pero que **no quieres que sean escaneados**. Se mostrará una advertencia `⚠️` en la terminal para estos archivos.
 - **`config_pack_ai.py`**: Archivo central para cambiar comportamientos por defecto del script.
 
 ## 🛡️ Seguridad y Limitaciones
