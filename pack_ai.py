@@ -6,6 +6,13 @@ import subprocess
 import zipfile
 from pathlib import Path
 
+# Intentar cargar configuración externa
+try:
+    import config_pack_ai
+    CONFIG_INCLUDE_ENV = getattr(config_pack_ai, "INCLUDE_ENV_EXAMPLE", True)
+except ImportError:
+    CONFIG_INCLUDE_ENV = True
+
 # Directorios que se ignoran en cualquier nivel de la ruta
 IGNORED_DIR_NAMES = {
     ".git", "node_modules", ".venv", "venv", "env", "__pycache__",
@@ -29,11 +36,14 @@ SECRET_FILE_PATTERNS = [
     "docker-compose.override.yml", "credentials", "credentials.json",
     "service-account*.json", "*service_account*.json", "firebase-adminsdk*.json",
     "google-credentials*.json", "gcloud*.json", "kubeconfig", "*.kubeconfig",
-    "config", "secrets.yml", "secrets.yaml", "secrets.json", "secret.yml",
+    "secrets.yml", "secrets.yaml", "secrets.json", "secret.yml",
     "secret.yaml", "secret.json", "local.settings.json", "appsettings.Production.json",
     "appsettings.Local.json", "application-prod.yml", "application-prod.yaml",
     "terraform.tfvars", "*.tfvars", "*.tfstate", "*.tfstate.backup",
 ]
+
+# Archivos de ejemplo de entorno que pueden permitirse (se escanean igual)
+SAFE_ENV_EXAMPLES = {".env.example", ".env.sample", ".env.template"}
 
 # Patrones de alta confianza para tokens con prefijo
 SECRET_PATTERNS = {
@@ -110,7 +120,7 @@ def is_probably_binary(path: Path, sample_size: int = 4096) -> bool:
     except OSError:
         return True
 
-def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
+def should_ignore_path(relative_path: str, patterns: list[str], include_env_example: bool = True) -> bool:
     """Verifica si una ruta debe ser ignorada por nombre o patrón."""
     normalized = relative_path.replace("\\", "/")
     path_obj = Path(normalized)
@@ -121,9 +131,11 @@ def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
     if any(part in IGNORED_DIR_NAMES for part in parts):
         return True
 
-    # Comprobar contra lista de archivos secretos
-    if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS):
-        return True
+    # Comprobar contra lista de archivos secretos (con excepción para ejemplos si está activo)
+    is_safe_env = include_env_example and name in SAFE_ENV_EXAMPLES
+    if not is_safe_env:
+        if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS):
+            return True
     
     for p in patterns:
         p = p.strip().replace("\\", "/")
@@ -204,7 +216,7 @@ def copy_zip(zip_path: Path, mode: str) -> str:
         return "failed"
     return "failed"
 
-def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str]) -> tuple[int, int, list[str]]:
+def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str], include_env_example: bool) -> tuple[int, int, list[str]]:
     """Crea el archivo ZIP evitando entrar en directorios ignorados."""
     incl, ign, findings = 0, 0, []
     output_zip_res = output_zip.resolve()
@@ -222,7 +234,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 rel = path.relative_to(root).as_posix()
                 
                 # 1. Exclusión total del ZIP
-                if should_ignore_path(rel, ignore_patterns):
+                if should_ignore_path(rel, ignore_patterns, include_env_example):
                     ign += 1; continue
                 
                 # 2. Saltarse el escáner pero incluir en ZIP
@@ -248,6 +260,8 @@ def main():
     parser = argparse.ArgumentParser(description="Empaqueta proyecto en ZIP para IA.")
     parser.add_argument("--copy", choices=["file", "path", "none"], default="file", help="Modo de copiado.")
     parser.add_argument("--output", help="Ruta del ZIP de salida.")
+    parser.add_argument("--no-env-example", action="store_false", dest="include_env_example", 
+                        default=CONFIG_INCLUDE_ENV, help="No incluir archivos .env.example.")
     parser.add_argument("folder", nargs=argparse.REMAINDER, help="Carpeta a procesar.")
     args = parser.parse_args()
 
@@ -265,7 +279,7 @@ def main():
     pass_patterns = load_aipass(root)
     print(f"Empaquetando: {root.name}...")
     
-    incl, ign, findings = create_zip(root, out_zip, ignore_patterns, pass_patterns)
+    incl, ign, findings = create_zip(root, out_zip, ignore_patterns, pass_patterns, args.include_env_example)
     for f in findings: print(f"⚠️  {f}")
 
     copy_res = copy_zip(out_zip, args.copy)
