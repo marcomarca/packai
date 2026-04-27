@@ -382,7 +382,8 @@ def main():
         raise SystemExit(f"❌ La ruta no es una carpeta: {root}")
 
     project_name = root.name if root.name else "project"
-    name = project_name
+    safe_project_name = sanitize_filename(project_name) or "project"
+    name = safe_project_name
     
     # Intentar obtener el nombre del último commit y su hash
     git_subject, git_hash = get_git_commit_info(root)
@@ -394,12 +395,12 @@ def main():
         # Formato: [Project]-[Subject]-[Hash].zip
         # .zip = 4 chars
         max_total = 200
-        available_for_subject = max_total - len(project_name) - len(suffix) - 5 # 1 guion extra y 4 de .zip
+        available_for_subject = max_total - len(safe_project_name) - len(suffix) - 5 # 1 guion extra y 4 de .zip
         
         if len(s_subject) > available_for_subject:
             s_subject = s_subject[:available_for_subject-3] + "..."
             
-        name = f"{project_name}-{s_subject}{suffix}"
+        name = f"{safe_project_name}-{s_subject}{suffix}"
 
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
