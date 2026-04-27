@@ -180,6 +180,8 @@ def create_zip(root: Path, output_zip: Path, patterns: list[str]) -> tuple[int, 
             
             for f in filenames:
                 path = Path(dirpath) / f
+                if path.is_symlink():
+                    ign += 1; continue
                 if path.resolve() == output_zip_res: continue
                 
                 rel = path.relative_to(root).as_posix()
