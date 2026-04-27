@@ -100,8 +100,12 @@ def load_ignore_file(path: Path) -> list[str]:
         try:
             content = path.read_text(encoding=enc)
             return [l.strip() for l in content.splitlines() if l.strip() and not l.strip().startswith("#")]
-        except (UnicodeDecodeError, Exception): continue
-    return []
+        except UnicodeDecodeError:
+            continue
+        except OSError as e:
+            raise SystemExit(f"❌ No se pudo leer {path}: {e}")
+    
+    raise SystemExit(f"❌ No se pudo decodificar {path} (probablemente binario o formato inválido)")
 
 def load_aiignore(root: Path) -> list[str]:
     """Carga patrones de exclusión total del ZIP."""
