@@ -243,8 +243,14 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
     output_zip_res = output_zip.resolve()
 
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
+        print(f"📁 {root.name}")
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [d for d in dirnames if d not in IGNORED_DIR_NAMES]
+            dirnames[:] = sorted([d for d in dirnames if d not in IGNORED_DIR_NAMES])
+            filenames = sorted(filenames)
+            
+            rel_dir = Path(dirpath).relative_to(root)
+            depth = len(rel_dir.parts)
+            indent = "    " * depth
             
             for f in filenames:
                 path = Path(dirpath) / f
@@ -261,6 +267,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 # 2. Saltarse el escáner pero incluir en ZIP
                 if should_ignore_path(rel, pass_patterns):
                     zipf.write(path, arcname=rel)
+                    print(f"{indent}📄 {f}")
                     incl += 1; continue
 
                 # 3. Detectar si es binario por contenido
@@ -278,6 +285,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                     ign += 1; continue
 
                 zipf.write(path, arcname=rel)
+                print(f"{indent}📄 {f}")
                 incl += 1
     return incl, ign, findings
 
