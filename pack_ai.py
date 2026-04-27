@@ -83,11 +83,20 @@ def mask_secret(value: str, visible_start: int = 6, visible_end: int = 4) -> str
     return f"{value[:visible_start]}...{value[-visible_end:]}"
 
 def load_aiignore(root: Path) -> list[str]:
-    """Carga patrones personalizados desde .aiignore."""
+    """Carga patrones de exclusión total del ZIP."""
     aiignore = root / ".aiignore"
     if not aiignore.exists(): return []
     try:
         lines = aiignore.read_text(encoding="utf-8", errors="ignore").splitlines()
+        return [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
+    except Exception: return []
+
+def load_aipass(root: Path) -> list[str]:
+    """Carga patrones de archivos que saltan el escáner pero se incluyen en el ZIP."""
+    aipass = root / ".aipass"
+    if not aipass.exists(): return []
+    try:
+        lines = aipass.read_text(encoding="utf-8", errors="ignore").splitlines()
         return [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
     except Exception: return []
 
@@ -164,19 +173,14 @@ def copy_zip(zip_path: Path, mode: str) -> bool:
         return copy_path_as_text(zip_path)
     return False
 
-def create_zip(root: Path, output_zip: Path, patterns: list[str]) -> tuple[int, int, list[str]]:
+def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str]) -> tuple[int, int, list[str]]:
     """Crea el archivo ZIP evitando entrar en directorios ignorados."""
     incl, ign, findings = 0, 0, []
     output_zip_res = output_zip.resolve()
 
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
         for dirpath, dirnames, filenames in os.walk(root):
-            # 1. Podar directorios ignorados (os.walk permite modificar dirnames in-place)
-            # Esto evita que el programa siquiera entre a estas carpetas.
             dirnames[:] = [d for d in dirnames if d not in IGNORED_DIR_NAMES]
-            
-            # También podar si el directorio actual coincide con algún patrón de .aiignore
-            # (Aunque esto es menos común para directorios, es por seguridad)
             
             for f in filenames:
                 path = Path(dirpath) / f
@@ -186,10 +190,16 @@ def create_zip(root: Path, output_zip: Path, patterns: list[str]) -> tuple[int, 
                 
                 rel = path.relative_to(root).as_posix()
                 
-                # 2. Filtrado final por patrones y secretos
-                if should_ignore_path(rel, patterns):
+                # 1. Exclusión total del ZIP
+                if should_ignore_path(rel, ignore_patterns):
                     ign += 1; continue
                 
+                # 2. Saltarse el escáner pero incluir en ZIP
+                if should_ignore_path(rel, pass_patterns):
+                    zipf.write(path, arcname=rel)
+                    incl += 1; continue
+
+                # 3. Escaneo normal
                 f_findings = scan_file_for_secrets(path)
                 if f_findings:
                     findings.append(f"SALTADO ({', '.join(f_findings)}): {rel}")
@@ -216,10 +226,11 @@ def main():
     name = root.name if root.name else "project"
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
-    patterns = DEFAULT_IGNORE + load_aiignore(root)
+    ignore_patterns = DEFAULT_IGNORE + load_aiignore(root)
+    pass_patterns = load_aipass(root)
     print(f"Empaquetando: {root.name}...")
     
-    incl, ign, findings = create_zip(root, out_zip, patterns)
+    incl, ign, findings = create_zip(root, out_zip, ignore_patterns, pass_patterns)
     for f in findings: print(f"⚠️  {f}")
 
     if copy_zip(out_zip, args.copy):
