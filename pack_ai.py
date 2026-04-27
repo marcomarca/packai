@@ -1,160 +1,191 @@
 import argparse
-import ctypes
 import fnmatch
 import os
 import re
-import struct
 import subprocess
 import zipfile
 from pathlib import Path
 
-try:
-    import win32clipboard
-    import win32con
-    HAS_PYWIN32 = True
-except ImportError:
-    HAS_PYWIN32 = False
-
-# Patrones de exclusión por defecto
+# Configuración de exclusiones globales
 DEFAULT_IGNORE = [
     ".git/*", "node_modules/*", ".venv/*", "venv/*", "env/*", "__pycache__/*",
     "dist/*", "build/*", ".next/*", ".nuxt/*", "coverage/*", ".pytest_cache/*",
     ".mypy_cache/*", ".idea/*", ".vscode/*", ".cache/*", "target/*",
-    ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx", "id_rsa", "id_ed25519",
-    "*.kubeconfig", "kubeconfig", ".npmrc", ".pypirc", "credentials.json",
-    "service-account*.json", "firebase-adminsdk*.json", "google-credentials*.json",
     "*.log", "*.tmp", "*.cache", "*.zip", "*.tar", "*.gz", "*.rar", "*.7z",
     "*.sqlite", "*.db", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.mp4",
     "*.mov", "*.pdf", "*.xlsx", "*.docx",
 ]
 
+# Archivos sensibles que se excluyen siempre por nombre
+SECRET_FILE_PATTERNS = [
+    ".env", ".env.*", "*.env", "*.pem", "*.key", "*.p8", "*.p12", "*.pfx",
+    "*.crt", "*.cer", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
+    "known_hosts", "authorized_keys", ".npmrc", ".pypirc", ".netrc", ".dockercfg",
+    "docker-compose.override.yml", "credentials", "credentials.json",
+    "service-account*.json", "*service_account*.json", "firebase-adminsdk*.json",
+    "google-credentials*.json", "gcloud*.json", "kubeconfig", "*.kubeconfig",
+    "config", "secrets.yml", "secrets.yaml", "secrets.json", "secret.yml",
+    "secret.yaml", "secret.json", "local.settings.json", "appsettings.Production.json",
+    "appsettings.Local.json", "application-prod.yml", "application-prod.yaml",
+    "terraform.tfvars", "*.tfvars", "*.tfstate", "*.tfstate.backup",
+]
+
+# Patrones de alta confianza para tokens con prefijo
 SECRET_PATTERNS = {
-    "AWS Key": re.compile(r"AKIA[0-9A-Z]{16}"),
-    "OpenAI Key": re.compile(r"sk-[a-zA-Z0-9]{32,}|sk-proj-[a-zA-Z0-9\-_]{48,}"),
-    "Generic Private Key": re.compile(r"-----BEGIN (RSA|EC|PGP|OPENSSH) PRIVATE KEY-----"),
-    "Google API Key": re.compile(r"AIza[0-9A-Za-z\\-_]{35}"),
-    "Slack Token": re.compile(r"xox[baprs]-[0-9a-zA-Z]{10,48}"),
-    "GitHub Token": re.compile(r"gh[opsu]_[0-9a-zA-Z]{36}"),
+    "OpenAI API Key": re.compile(r"\b(?:sk-[A-Za-z0-9]{32,}|sk-proj-[A-Za-z0-9_-]{48,})\b"),
+    "Groq API Key": re.compile(r"\bgsk_[A-Za-z0-9_-]{32,}\b"),
+    "Anthropic API Key": re.compile(r"\bsk-ant-[A-Za-z0-9_-]{32,}\b"),
+    "Hugging Face Token": re.compile(r"\bhf_[A-Za-z0-9]{30,}\b"),
+    "Replicate API Token": re.compile(r"\br8_[A-Za-z0-9]{32,}\b"),
+    "Perplexity API Key": re.compile(r"\bpplx-[A-Za-z0-9]{32,}\b"),
+    "Generic SK API Key": re.compile(r"\bsk-[A-Za-z0-9_-]{32,}\b"),
+    "AWS Access Key ID": re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    "AWS Secret Access Key Context": re.compile(r"(?i)\baws_secret_access_key\b\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{40}[\"']?"),
+    "Google API Key": re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
+    "Google OAuth Client Secret": re.compile(r"\bGOCSPX-[A-Za-z0-9_-]{20,}\b"),
+    "Google Service Account Private Key": re.compile(r"-----BEGIN PRIVATE KEY-----[\s\S]+?-----END PRIVATE KEY-----"),
+    "Azure Storage Connection String": re.compile(r"(?i)\bDefaultEndpointsProtocol=https?;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{60,};EndpointSuffix="),
+    "Azure Storage Account Key Context": re.compile(r"(?i)\b(?:azure|account).{0,30}(?:key|secret)\b\s*[:=]\s*[\"']?[A-Za-z0-9+/=]{60,}[\"']?"),
+    "Cloudflare API Token Context": re.compile(r"(?i)\b(?:cloudflare|cf)_(?:api_)?(?:token|key)\b\s*[:=]\s*[\"']?[A-Za-z0-9_-]{30,}[\"']?"),
+    "DigitalOcean Token": re.compile(r"\bdop_v1_[A-Fa-f0-9]{64}\b"),
+    "Heroku API Key Context": re.compile(r"(?i)\bheroku(?:_api)?_key\b\s*[:=]\s*[\"']?[A-Fa-f0-9]{32}[\"']?"),
+    "GitHub Classic Token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36}\b"),
+    "GitHub Fine-Grained Token": re.compile(r"\bgithub_pat_[A-Za-z0-9_]{40,}\b"),
+    "GitLab Token": re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b"),
+    "GitLab OAuth Token": re.compile(r"\bgloas-[A-Za-z0-9_-]{20,}\b"),
+    "NPM Token": re.compile(r"\bnpm_[A-Za-z0-9]{36}\b"),
+    "PyPI Token": re.compile(r"\bpypi-[A-Za-z0-9_-]{50,}\b"),
+    "Generic Private Key": re.compile(r"-----BEGIN (?:RSA|DSA|EC|OPENSSH|PGP|PRIVATE) PRIVATE KEY-----"),
+    "Stripe Secret Key": re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{20,}\b"),
+    "Slack Token": re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,100}\b"),
+    "Discord Bot Token": re.compile(r"\b[A-Za-z0-9_-]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{25,110}\b"),
+    "Telegram Bot Token": re.compile(r"\b[0-9]{8,12}:[A-Za-z0-9_-]{30,}\b"),
+    "SendGrid API Key": re.compile(r"\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{32,80}\b"),
+    "JWT Token": re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
 }
 
+# Patrones contextuales para asignaciones sospechosas
+SENSITIVE_ASSIGNMENT_PATTERNS = {
+    "Generic API Key Assignment": re.compile(r"(?i)\b[A-Z0-9_]*(?:API_KEY|ACCESS_KEY|SECRET_KEY|PRIVATE_KEY|APP_KEY)[A-Z0-9_]*\b\s*[:=]\s*[\"']?[^\"'\s]{12,}[\"']?"),
+    "Generic Token Assignment": re.compile(r"(?i)\b[A-Z0-9_]*(?:TOKEN|AUTH_TOKEN|ACCESS_TOKEN|REFRESH_TOKEN|ID_TOKEN)[A-Z0-9_]*\b\s*[:=]\s*[\"']?[^\"'\s]{12,}[\"']?"),
+    "Generic Password Assignment": re.compile(r"(?i)\b[A-Z0-9_]*(?:PASSWORD|PASSWD|PWD)[A-Z0-9_]*\b\s*[:=]\s*[\"']?[^\"'\s]{8,}[\"']?"),
+    "Generic DB Connection String": re.compile(r"(?i)\b(?:DATABASE_URL|DB_URL|DATABASE_URI|MONGO_URI|REDIS_URL)\b\s*[:=]\s*[\"']?[^\"'\s]{12,}[\"']?"),
+}
+
+def mask_secret(value: str, visible_start: int = 6, visible_end: int = 4) -> str:
+    """Oculta parte de un secreto para mostrarlo en el reporte."""
+    value = value.strip()
+    if len(value) <= visible_start + visible_end: return "*" * len(value)
+    return f"{value[:visible_start]}...{value[-visible_end:]}"
+
 def load_aiignore(root: Path) -> list[str]:
+    """Carga patrones personalizados desde .aiignore."""
     aiignore = root / ".aiignore"
     if not aiignore.exists(): return []
-    patterns = []
     try:
-        for line in aiignore.read_text(encoding="utf-8", errors="ignore").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"): continue
-            patterns.append(line)
-    except Exception: pass
-    return patterns
+        lines = aiignore.read_text(encoding="utf-8", errors="ignore").splitlines()
+        return [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
+    except Exception: return []
 
 def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
+    """Verifica si una ruta debe ser ignorada por nombre o patrón."""
+    name = Path(relative_path).name
+    if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS): return True
+    
     normalized = relative_path.replace("\\", "/")
-    for pattern in patterns:
-        pattern = pattern.strip().replace("\\", "/")
-        if not pattern: continue
-        if pattern.endswith("/") and normalized.startswith(pattern): return True
-        if fnmatch.fnmatch(normalized, pattern): return True
-        if fnmatch.fnmatch(Path(normalized).name, pattern): return True
+    for p in patterns:
+        p = p.strip().replace("\\", "/")
+        if not p: continue
+        if p.endswith("/") and normalized.startswith(p): return True
+        if fnmatch.fnmatch(normalized, p) or fnmatch.fnmatch(name, p): return True
     return False
 
-def contains_secrets(file_path: Path) -> tuple[bool, str | None]:
-    if file_path.stat().st_size > 1024 * 1024: return False, None
-    for encoding in ["utf-8", "utf-16", "latin-1"]:
+def scan_file_for_secrets(path: Path) -> list[str]:
+    """Escanea el contenido de un archivo en busca de secretos."""
+    if path.name == "pack_ai.py" or path.stat().st_size > 1024 * 1024: return []
+    findings = []
+    for enc in ["utf-8", "utf-16", "latin-1"]:
         try:
-            content = file_path.read_text(encoding=encoding, errors="strict")
-            for name, pattern in SECRET_PATTERNS.items():
-                if pattern.search(content): return True, name
+            content = path.read_text(encoding=enc, errors="strict")
+            for name, p in SECRET_PATTERNS.items():
+                if match := p.search(content):
+                    findings.append(f"{name}: {mask_secret(match.group(0))}")
+            if not findings:
+                for name, p in SENSITIVE_ASSIGNMENT_PATTERNS.items():
+                    if match := p.search(content):
+                        findings.append(f"{name}: {mask_secret(match.group(0))}")
             break
         except (UnicodeDecodeError, Exception): continue
-    return False, None
+    return findings
 
-def copy_file_to_clipboard(file_path: Path) -> bool:
-    """Copia un archivo al portapapeles de Windows (como objeto pegable)."""
-    abs_path = str(file_path.resolve())
-    
-    # 1. Intentar con PowerShell (el método más nativo y fiable en Windows moderno)
-    try:
-        # Comando para copiar archivo al portapapeles
-        cmd = f'powershell -Command "Set-Clipboard -Path \'{abs_path}\'"'
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        if result.returncode == 0:
-            return True
-    except Exception:
-        pass
+def copy_zip_with_powershell(zip_path: Path) -> bool:
+    """Copia el ZIP al portapapeles de Windows (objeto pegable)."""
+    p_esc = str(zip_path.resolve()).replace("'", "''")
+    cmd = f"Set-Clipboard -LiteralPath '{p_esc}'"
+    res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True)
+    return res.returncode == 0
 
-    # 2. Intentar con pywin32 (como respaldo o si PS falla)
-    if HAS_PYWIN32:
-        try:
-            # Estructura DROPFILES
-            files_bytes = (abs_path + "\0\0").encode("utf-16le")
-            dropfiles = struct.pack("IiiII", 20, 0, 0, 0, 1) + files_bytes
-            
-            kernel32 = ctypes.windll.kernel32
-            h_mem = kernel32.GlobalAlloc(0x0042, len(dropfiles)) # GHND
-            if h_mem:
-                ptr = kernel32.GlobalLock(h_mem)
-                ctypes.memmove(ptr, dropfiles, len(dropfiles))
-                kernel32.GlobalUnlock(h_mem)
-                
-                win32clipboard.OpenClipboard()
-                try:
-                    win32clipboard.EmptyClipboard()
-                    win32clipboard.SetClipboardData(win32con.CF_HDROP, h_mem)
-                    return True
-                finally:
-                    win32clipboard.CloseClipboard()
-        except Exception:
-            pass
-            
+def copy_path_as_text(path: Path) -> bool:
+    """Copia la ruta absoluta al portapapeles como texto."""
+    cmd = "Set-Clipboard -Value $args[0]"
+    res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd, str(path.resolve())], capture_output=True, text=True)
+    return res.returncode == 0
+
+def copy_zip(zip_path: Path, mode: str) -> bool:
+    """Gestiona el copiado del resultado según el modo elegido."""
+    if mode == "none": return True
+    if mode == "path": return copy_path_as_text(zip_path)
+    if mode == "file":
+        if copy_zip_with_powershell(zip_path): return True
+        return copy_path_as_text(zip_path)
     return False
 
-def create_zip(root: Path, output_zip: Path, patterns: list[str], scan_secrets: bool = True) -> tuple[int, int, list[str]]:
-    included, ignored, secret_warnings = 0, 0, []
+def create_zip(root: Path, output_zip: Path, patterns: list[str]) -> tuple[int, int, list[str]]:
+    """Crea el archivo ZIP aplicando filtros de exclusión y escaneo de secretos."""
+    incl, ign, findings = 0, 0, []
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
         for path in root.rglob("*"):
             if not path.is_file() or path.resolve() == output_zip.resolve(): continue
-            relative = path.relative_to(root).as_posix()
-            if should_ignore_path(relative, patterns):
-                ignored += 1
-                continue
-            if scan_secrets:
-                has_secret, secret_type = contains_secrets(path)
-                if has_secret:
-                    secret_warnings.append(f"SALTADO: {relative}")
-                    ignored += 1
-                    continue
-            zipf.write(path, arcname=relative)
-            included += 1
-    return included, ignored, secret_warnings
+            rel = path.relative_to(root).as_posix()
+            
+            if should_ignore_path(rel, patterns):
+                ign += 1; continue
+            
+            f_findings = scan_file_for_secrets(path)
+            if f_findings:
+                findings.append(f"SALTADO ({', '.join(f_findings)}): {rel}")
+                ign += 1; continue
+
+            zipf.write(path, arcname=rel)
+            incl += 1
+    return incl, ign, findings
 
 def main():
-    parser = argparse.ArgumentParser(description="Pack AI project to ZIP.")
-    parser.add_argument("folder", nargs="*", help="Carpeta.")
+    parser = argparse.ArgumentParser(description="Empaqueta proyecto en ZIP para IA.")
+    parser.add_argument("--copy", choices=["file", "path", "none"], default="file", help="Modo de copiado.")
+    parser.add_argument("--output", help="Ruta del ZIP de salida.")
+    parser.add_argument("folder", nargs=argparse.REMAINDER, help="Carpeta a procesar.")
     args = parser.parse_args()
 
-    folder_path = " ".join(args.folder) if args.folder else "."
-    root = Path(folder_path).expanduser().resolve()
-    if not root.exists(): return
+    f_path = " ".join(args.folder).strip() if args.folder else "."
+    root = Path(f_path).expanduser().resolve()
+    if not root.exists() or not root.is_dir(): return
 
     name = root.name if root.name else "project"
-    output_zip = root.parent / f"{name}.zip"
+    out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
     patterns = DEFAULT_IGNORE + load_aiignore(root)
     print(f"Empaquetando: {root.name}...")
     
-    included, ignored, _ = create_zip(root, output_zip, patterns)
+    incl, ign, findings = create_zip(root, out_zip, patterns)
+    for f in findings: print(f"⚠️  {f}")
 
-    if copy_file_to_clipboard(output_zip):
-        status = "✅ ZIP copiado. ¡Ya puedes darle a Pegar (Ctrl+V)!"
+    if copy_zip(out_zip, args.copy):
+        st = "✅ ZIP copiado al portapapeles." if args.copy == "file" else "✅ Ruta copiada."
     else:
-        status = f"❌ Error al copiar. El archivo está en: {output_zip}"
+        st = f"❌ Error al copiar. Archivo en: {out_zip}"
 
-    print("-" * 30)
-    print(f"Incluidos: {included} | Ignorados: {ignored}")
-    print(status)
-    print("-" * 30)
+    print("-" * 30 + f"\nIncluidos: {incl} | Ignorados: {ign}\n{st}\n" + "-" * 30)
 
 if __name__ == "__main__":
     main()
