@@ -6,11 +6,15 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-# Configuración de exclusiones globales
+# Directorios que se ignoran en cualquier nivel de la ruta
+IGNORED_DIR_NAMES = {
+    ".git", "node_modules", ".venv", "venv", "env", "__pycache__",
+    "dist", "build", ".next", ".nuxt", "coverage", ".pytest_cache",
+    ".mypy_cache", ".idea", ".vscode", ".cache", "target",
+}
+
+# Extensiones o patrones de archivos basura adicionales
 DEFAULT_IGNORE = [
-    ".git/*", "node_modules/*", ".venv/*", "venv/*", "env/*", "__pycache__/*",
-    "dist/*", "build/*", ".next/*", ".nuxt/*", "coverage/*", ".pytest_cache/*",
-    ".mypy_cache/*", ".idea/*", ".vscode/*", ".cache/*", "target/*",
     "*.log", "*.tmp", "*.cache", "*.zip", "*.tar", "*.gz", "*.rar", "*.7z",
     "*.sqlite", "*.db", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.mp4",
     "*.mov", "*.pdf", "*.xlsx", "*.docx",
@@ -89,10 +93,19 @@ def load_aiignore(root: Path) -> list[str]:
 
 def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
     """Verifica si una ruta debe ser ignorada por nombre o patrón."""
-    name = Path(relative_path).name
-    if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS): return True
-    
     normalized = relative_path.replace("\\", "/")
+    path_obj = Path(normalized)
+    parts = path_obj.parts
+    name = path_obj.name
+
+    # Ignorar si algún directorio en la ruta está en la lista negra
+    if any(part in IGNORED_DIR_NAMES for part in parts):
+        return True
+
+    # Comprobar contra lista de archivos secretos
+    if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS):
+        return True
+    
     for p in patterns:
         p = p.strip().replace("\\", "/")
         if not p: continue
@@ -152,23 +165,36 @@ def copy_zip(zip_path: Path, mode: str) -> bool:
     return False
 
 def create_zip(root: Path, output_zip: Path, patterns: list[str]) -> tuple[int, int, list[str]]:
-    """Crea el archivo ZIP aplicando filtros de exclusión y escaneo de secretos."""
+    """Crea el archivo ZIP evitando entrar en directorios ignorados."""
     incl, ign, findings = 0, 0, []
-    with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
-        for path in root.rglob("*"):
-            if not path.is_file() or path.resolve() == output_zip.resolve(): continue
-            rel = path.relative_to(root).as_posix()
-            
-            if should_ignore_path(rel, patterns):
-                ign += 1; continue
-            
-            f_findings = scan_file_for_secrets(path)
-            if f_findings:
-                findings.append(f"SALTADO ({', '.join(f_findings)}): {rel}")
-                ign += 1; continue
+    output_zip_res = output_zip.resolve()
 
-            zipf.write(path, arcname=rel)
-            incl += 1
+    with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
+        for dirpath, dirnames, filenames in os.walk(root):
+            # 1. Podar directorios ignorados (os.walk permite modificar dirnames in-place)
+            # Esto evita que el programa siquiera entre a estas carpetas.
+            dirnames[:] = [d for d in dirnames if d not in IGNORED_DIR_NAMES]
+            
+            # También podar si el directorio actual coincide con algún patrón de .aiignore
+            # (Aunque esto es menos común para directorios, es por seguridad)
+            
+            for f in filenames:
+                path = Path(dirpath) / f
+                if path.resolve() == output_zip_res: continue
+                
+                rel = path.relative_to(root).as_posix()
+                
+                # 2. Filtrado final por patrones y secretos
+                if should_ignore_path(rel, patterns):
+                    ign += 1; continue
+                
+                f_findings = scan_file_for_secrets(path)
+                if f_findings:
+                    findings.append(f"SALTADO ({', '.join(f_findings)}): {rel}")
+                    ign += 1; continue
+
+                zipf.write(path, arcname=rel)
+                incl += 1
     return incl, ign, findings
 
 def main():
