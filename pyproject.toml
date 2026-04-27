@@ -5,3 +5,8 @@ description = "Package a project into a ZIP optimized for AI review while exclud
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
