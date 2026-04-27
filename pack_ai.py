@@ -13,7 +13,20 @@ try:
 except ImportError:
     CONFIG_INCLUDE_ENV = True
 
-VERSION = "1.1.0"
+def get_version():
+    """Lee la versión desde pyproject.toml."""
+    try:
+        pyproject_path = Path(__file__).parent / "pyproject.toml"
+        if pyproject_path.exists():
+            content = pyproject_path.read_text(encoding="utf-8")
+            match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+            if match:
+                return match.group(1)
+    except Exception:
+        pass
+    return "1.1.0"
+
+VERSION = get_version()
 
 # Directorios que se ignoran en cualquier nivel de la ruta
 IGNORED_DIR_NAMES = {
@@ -303,7 +316,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 # 2. Saltarse el escáner pero incluir en ZIP
                 if should_ignore_path(rel, pass_patterns):
                     zipf.write(path, arcname=rel)
-                    print(f"{indent_file}    📄 {f}")
+                    print(f"{indent_file}    ⚠️  Incluido sin escaneo por .aipass: {f}")
                     incl += 1; continue
 
                 # 3. Detectar si es binario por contenido
