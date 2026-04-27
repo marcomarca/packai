@@ -82,23 +82,23 @@ def mask_secret(value: str, visible_start: int = 6, visible_end: int = 4) -> str
     if len(value) <= visible_start + visible_end: return "*" * len(value)
     return f"{value[:visible_start]}...{value[-visible_end:]}"
 
+def load_ignore_file(path: Path) -> list[str]:
+    """Carga patrones de un archivo intentando varias codificaciones."""
+    if not path.exists(): return []
+    for enc in ["utf-8", "utf-16", "latin-1"]:
+        try:
+            content = path.read_text(encoding=enc)
+            return [l.strip() for l in content.splitlines() if l.strip() and not l.strip().startswith("#")]
+        except (UnicodeDecodeError, Exception): continue
+    return []
+
 def load_aiignore(root: Path) -> list[str]:
     """Carga patrones de exclusión total del ZIP."""
-    aiignore = root / ".aiignore"
-    if not aiignore.exists(): return []
-    try:
-        lines = aiignore.read_text(encoding="utf-8", errors="ignore").splitlines()
-        return [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
-    except Exception: return []
+    return load_ignore_file(root / ".aiignore")
 
 def load_aipass(root: Path) -> list[str]:
     """Carga patrones de archivos que saltan el escáner pero se incluyen en el ZIP."""
-    aipass = root / ".aipass"
-    if not aipass.exists(): return []
-    try:
-        lines = aipass.read_text(encoding="utf-8", errors="ignore").splitlines()
-        return [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
-    except Exception: return []
+    return load_ignore_file(root / ".aipass")
 
 def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
     """Verifica si una ruta debe ser ignorada por nombre o patrón."""
@@ -118,8 +118,15 @@ def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
     for p in patterns:
         p = p.strip().replace("\\", "/")
         if not p: continue
-        if p.endswith("/") and normalized.startswith(p): return True
-        if fnmatch.fnmatch(normalized, p) or fnmatch.fnmatch(name, p): return True
+        
+        if p.endswith("/"):
+            dir_p = p.rstrip("/")
+            # Comprobar si el patrón es un segmento completo de la ruta
+            if normalized.startswith(p) or f"/{dir_p}/" in f"/{normalized}/":
+                return True
+        
+        if fnmatch.fnmatch(normalized, p) or fnmatch.fnmatch(name, p):
+            return True
     return False
 
 def scan_file_for_secrets(path: Path) -> list[str]:
