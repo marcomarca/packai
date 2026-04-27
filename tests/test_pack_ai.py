@@ -37,7 +37,7 @@ def test_aipass_bypass_scanner(temp_project):
     """Verifica que archivos en .aipass se incluyan sin ser escaneados."""
     # Archivo con secreto que normalmente sería bloqueado
     secret_file = temp_project / "secret.py"
-    secret_file.write_text("API_KEY='sk-12345678901234567890123456789012'", encoding="utf-8")
+    secret_file.write_text("API_KEY=" + "'sk" + "-12345678901234567890123456789012'", encoding="utf-8")
     
     # Añadir a .aipass
     (temp_project / ".aipass").write_text("secret.py", encoding="utf-8")
@@ -66,8 +66,8 @@ def test_env_example_inclusion(temp_project):
 def test_env_example_exclusion_with_secret(temp_project):
     """Verifica que .env.example se excluya si tiene secretos."""
     env_ex = temp_project / ".env.example"
-    # Usamos un secreto que dispare el escáner con total seguridad
-    env_ex.write_text("OPENAI_KEY=sk-12345678901234567890123456789012", encoding="utf-8")
+    # Usamos un secreto que dispare el escáner con total seguridad (concatenado para no dispararlo aquí)
+    env_ex.write_text("OPENAI_KEY=" + "sk" + "-12345678901234567890123456789012", encoding="utf-8")
     
     zip_path = temp_project.parent / "test.zip"
     incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
