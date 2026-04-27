@@ -4,6 +4,13 @@ $ProjectRoot = $PSScriptRoot
 $BinDir = "$env:USERPROFILE\bin"
 $CmdFile = Join-Path $BinDir "packai.cmd"
 
+# 0. Verificar requisitos
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Host "❌ uv no está instalado o no está en el PATH." -ForegroundColor Red
+    Write-Host "💡 Instálalo con: powershell -c ""irm https://astral.sh/uv/install.ps1 | iex""" -ForegroundColor Yellow
+    exit 1
+}
+
 Write-Host "🚀 Iniciando instalación de Pack AI..." -ForegroundColor Cyan
 
 # 1. Crear carpeta bin si no existe

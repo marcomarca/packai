@@ -10,8 +10,16 @@
 - **📋 Copiado Automático**: Copia el archivo ZIP resultante directamente al portapapeles (en Windows).
 - **⚙️ Configuración Flexible**: Soporte para archivos `.aiignore` (exclusión total) y `.aipass` (inclusión sin escaneo).
 - **📄 Manejo Inteligente de Entornos**: Permite incluir archivos `.env.example` de forma segura (siempre que no contengan secretos reales).
+- **🏷️ Versionado Automático**: El nombre del ZIP incluye el último commit de Git y su hash para facilitar el seguimiento de versiones.
 
-## 🚀 Instalación en Windows
+## 📋 Requisitos
+
+Para usar esta herramienta necesitas:
+
+- **Windows 10/11** y **PowerShell**.
+- **Python 3.12+**.
+- **[uv](https://astral.sh/uv/)** instalado y disponible en el PATH.
+- **Git** (opcional, para el nombrado automático basado en commits).
 
 Para instalar `packai` como un comando global en tu sistema:
 
