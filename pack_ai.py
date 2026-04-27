@@ -102,7 +102,6 @@ def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
 
 def scan_file_for_secrets(path: Path) -> list[str]:
     """Escanea el contenido de un archivo en busca de secretos."""
-    if path.name == "pack_ai.py": return []
     if path.stat().st_size > 1024 * 1024:
         return [f"Archivo demasiado grande para escaneo: {path.stat().st_size} bytes"]
     
@@ -113,10 +112,10 @@ def scan_file_for_secrets(path: Path) -> list[str]:
             for name, p in SECRET_PATTERNS.items():
                 if match := p.search(content):
                     findings.append(f"{name}: {mask_secret(match.group(0))}")
-            if not findings:
-                for name, p in SENSITIVE_ASSIGNMENT_PATTERNS.items():
-                    if match := p.search(content):
-                        findings.append(f"{name}: {mask_secret(match.group(0))}")
+            
+            for name, p in SENSITIVE_ASSIGNMENT_PATTERNS.items():
+                if match := p.search(content):
+                    findings.append(f"{name}: {mask_secret(match.group(0))}")
             break
         except (UnicodeDecodeError, Exception): continue
     return findings
