@@ -13,6 +13,8 @@ try:
 except ImportError:
     CONFIG_INCLUDE_ENV = True
 
+VERSION = "1.1.0"
+
 # Directorios que se ignoran en cualquier nivel de la ruta
 IGNORED_DIR_NAMES = {
     ".git", "node_modules", ".venv", "venv", "env", "__pycache__",
@@ -323,8 +325,28 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 incl += 1
     return incl, ign, findings
 
+def get_git_commit_info(root: Path) -> str | None:
+    """Obtiene el asunto del último commit de git."""
+    try:
+        res = subprocess.run(
+            ["git", "log", "-1", "--pretty=%s"],
+            cwd=root, capture_output=True, text=True, check=True
+        )
+        return res.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+def sanitize_filename(name: str, max_length: int = 200) -> str:
+    """Limpia el nombre para que sea un nombre de archivo válido y limita su longitud."""
+    invalid_chars = r'[\\/:*?"<>|]'
+    sanitized = re.sub(invalid_chars, "_", name)
+    if len(sanitized) > max_length:
+        return sanitized[:max_length-3] + "..."
+    return sanitized
+
 def main():
     parser = argparse.ArgumentParser(description="Empaqueta proyecto en ZIP para IA.")
+    parser.add_argument("--version", "-v", action="version", version=f"Pack AI {VERSION}")
     parser.add_argument("--copy", choices=["file", "path", "none"], default="file", help="Modo de copiado.")
     parser.add_argument("--output", help="Ruta del ZIP de salida.")
     parser.add_argument("--no-env-example", action="store_false", dest="include_env_example", 
@@ -339,7 +361,16 @@ def main():
     if not root.is_dir():
         raise SystemExit(f"❌ La ruta no es una carpeta: {root}")
 
-    name = root.name if root.name else "project"
+    project_name = root.name if root.name else "project"
+    name = project_name
+    
+    # Intentar obtener el nombre del último commit
+    git_name = get_git_commit_info(root)
+    if git_name:
+        # Formato: [NombreProyecto]-[Commit]
+        full_name = f"{project_name}-{git_name}"
+        name = sanitize_filename(full_name)
+
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
     ignore_patterns = DEFAULT_IGNORE + load_aiignore(root)
