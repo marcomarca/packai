@@ -346,10 +346,11 @@ def get_git_commit_info(root: Path) -> tuple[str | None, str | None]:
             ["git", "log", "-1", "--pretty=%s|%h"],
             cwd=root, capture_output=True, text=True, check=True
         )
-        parts = res.stdout.strip().split("|")
-        if len(parts) == 2:
-            return parts[0], parts[1]
-        return parts[0], None
+        data = res.stdout.strip()
+        if "|" in data:
+            subject, short_hash = data.rsplit("|", 1)
+            return subject, short_hash
+        return data, None
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None, None
 

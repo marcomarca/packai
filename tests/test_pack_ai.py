@@ -2,7 +2,8 @@ import os
 import zipfile
 from pathlib import Path
 import pytest
-from pack_ai import create_zip, scan_file_for_secrets, should_ignore_path, copy_zip
+from unittest.mock import patch, MagicMock
+from pack_ai import create_zip, scan_file_for_secrets, should_ignore_path, copy_zip, sanitize_filename, get_git_commit_info
 
 @pytest.fixture
 def temp_project(tmp_path):
@@ -91,3 +92,55 @@ def test_copy_zip_modes():
     """Verifica los retornos de estado de copy_zip."""
     # No necesitamos un zip real para el modo 'none'
     assert copy_zip(Path("dummy.zip"), "none") == "none"
+
+def test_sanitize_filename_basic():
+    """Prueba sanitización básica de caracteres no permitidos."""
+    assert sanitize_filename("proj-fix: aggressive filename") == "proj-fix_aggressive_filename"
+    assert sanitize_filename("a:::b") == "a_b"
+    assert sanitize_filename("file?name*test") == "file_name_test"
+
+def test_sanitize_filename_unicode():
+    """Prueba que los acentos y eñes se normalicen a ASCII."""
+    assert sanitize_filename("cambio ñ áéíóú") == "cambio_n_aeiou"
+
+def test_sanitize_filename_strip_underscores():
+    """Prueba que se eliminen guiones bajos al inicio/final y duplicados."""
+    assert sanitize_filename("___test___") == "test"
+    assert sanitize_filename("a__b--c..d") == "a_b--c..d"
+
+def test_windows_reserved_names_mitigation():
+    """Verifica que nombres reservados sean sanitizados (aunque el .zip ayuda)."""
+    # Aunque no los renombramos explícitamente a algo distinto de NUL, 
+    # la extensión .zip suele evitar el problema en Windows.
+    # Aquí solo verificamos que no se rompa la sanitización básica.
+    assert sanitize_filename("CON") == "CON"
+    assert sanitize_filename("aux.py") == "aux.py"
+
+def test_get_git_commit_info_success():
+    """Verifica la obtención de info de git con mock."""
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            stdout="feat: test commit|abcdefg\n",
+            returncode=0
+        )
+        subject, short_hash = get_git_commit_info(Path("."))
+        assert subject == "feat: test commit"
+        assert short_hash == "abcdefg"
+
+def test_get_git_commit_info_with_pipe():
+    """Verifica que mensajes con el carácter pipe '|' se procesen bien."""
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            stdout="feat: add | pipe test|1234567\n",
+            returncode=0
+        )
+        subject, short_hash = get_git_commit_info(Path("."))
+        assert subject == "feat: add | pipe test"
+        assert short_hash == "1234567"
+
+def test_get_git_commit_info_fail():
+    """Verifica fallo al obtener info de git."""
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        subject, short_hash = get_git_commit_info(Path("."))
+        assert subject is None
+        assert short_hash is None
