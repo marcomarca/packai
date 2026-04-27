@@ -134,19 +134,28 @@ def scan_file_for_secrets(path: Path) -> list[str]:
     if path.stat().st_size > 1024 * 1024:
         return [f"Archivo demasiado grande para escaneo: {path.stat().st_size} bytes"]
     
-    findings = []
+    content = None
     for enc in ["utf-8", "utf-16", "latin-1"]:
         try:
             content = path.read_text(encoding=enc, errors="strict")
-            for name, p in SECRET_PATTERNS.items():
-                if match := p.search(content):
-                    findings.append(f"{name}: {mask_secret(match.group(0))}")
-            
-            for name, p in SENSITIVE_ASSIGNMENT_PATTERNS.items():
-                if match := p.search(content):
-                    findings.append(f"{name}: {mask_secret(match.group(0))}")
             break
-        except (UnicodeDecodeError, Exception): continue
+        except UnicodeDecodeError:
+            continue
+        except OSError as e:
+            return [f"No se pudo leer el archivo: {e}"]
+    
+    if content is None:
+        return ["No se pudo decodificar el archivo para escaneo"]
+
+    findings = []
+    for name, p in SECRET_PATTERNS.items():
+        if match := p.search(content):
+            findings.append(f"{name}: {mask_secret(match.group(0))}")
+    
+    for name, p in SENSITIVE_ASSIGNMENT_PATTERNS.items():
+        if match := p.search(content):
+            findings.append(f"{name}: {mask_secret(match.group(0))}")
+    
     return findings
 
 def copy_zip_with_powershell(zip_path: Path) -> bool:
