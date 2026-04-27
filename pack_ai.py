@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import zipfile
+import unicodedata
 from pathlib import Path
 
 # Intentar cargar configuración externa
@@ -338,27 +339,28 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 incl += 1
     return incl, ign, findings
 
-def get_git_commit_info(root: Path) -> str | None:
-    """Obtiene el asunto del último commit de git."""
+def get_git_commit_info(root: Path) -> tuple[str | None, str | None]:
+    """Obtiene el asunto y el hash corto del último commit de git."""
     try:
         res = subprocess.run(
-            ["git", "log", "-1", "--pretty=%s"],
+            ["git", "log", "-1", "--pretty=%s|%h"],
             cwd=root, capture_output=True, text=True, check=True
         )
-        return res.stdout.strip()
+        parts = res.stdout.strip().split("|")
+        if len(parts) == 2:
+            return parts[0], parts[1]
+        return parts[0], None
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
+        return None, None
 
-def sanitize_filename(name: str, max_length: int = 200) -> str:
-    """Limpia el nombre para que sea un nombre de archivo válido y limita su longitud."""
+def sanitize_filename(name: str) -> str:
+    """Limpia el nombre para que sea un nombre de archivo válido."""
+    # Normalizar Unicode para quitar acentos y eñes (á -> a, ñ -> n)
+    name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
     # Reemplazar cualquier cosa que no sea alfanumérica, punto, guion o guion bajo por "_"
-    # Esto elimina espacios, corchetes, comas, etc. que dan problemas en algunas plataformas
     sanitized = re.sub(r'[^a-zA-Z0-9.\-_]', "_", name)
     # Limpiar guiones bajos consecutivos
-    sanitized = re.sub(r'_{2,}', "_", sanitized)
-    
-    if len(sanitized) > max_length:
-        return sanitized[:max_length-3] + "..."
+    sanitized = re.sub(r'_{2,}', "_", sanitized).strip("_")
     return sanitized
 
 def main():
@@ -381,12 +383,22 @@ def main():
     project_name = root.name if root.name else "project"
     name = project_name
     
-    # Intentar obtener el nombre del último commit
-    git_name = get_git_commit_info(root)
-    if git_name:
-        # Formato: [NombreProyecto]-[Commit]
-        full_name = f"{project_name}-{git_name}"
-        name = sanitize_filename(full_name)
+    # Intentar obtener el nombre del último commit y su hash
+    git_subject, git_hash = get_git_commit_info(root)
+    if git_subject:
+        s_subject = sanitize_filename(git_subject)
+        suffix = f"-{git_hash}" if git_hash else ""
+        
+        # El total debe ser de máximo 200 caracteres (incluyendo .zip)
+        # Formato: [Project]-[Subject]-[Hash].zip
+        # .zip = 4 chars
+        max_total = 200
+        available_for_subject = max_total - len(project_name) - len(suffix) - 5 # 1 guion extra y 4 de .zip
+        
+        if len(s_subject) > available_for_subject:
+            s_subject = s_subject[:available_for_subject-3] + "..."
+            
+        name = f"{project_name}-{s_subject}{suffix}"
 
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
