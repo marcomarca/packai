@@ -158,7 +158,11 @@ def should_ignore_path(relative_path: str, patterns: list[str], include_env_exam
 def scan_file_for_secrets(path: Path) -> list[str]:
     """Escanea el contenido de un archivo en busca de secretos."""
     if path.stat().st_size > 1024 * 1024:
-        return [f"Archivo demasiado grande para escaneo: {path.stat().st_size} bytes"]
+        return [{
+            "type": "Archivo demasiado grande para escaneo",
+            "secret": f"{path.stat().st_size} bytes",
+            "line": None,
+        }]
     
     content = None
     for enc in ["utf-8", "utf-16", "latin-1"]:
@@ -168,10 +172,18 @@ def scan_file_for_secrets(path: Path) -> list[str]:
         except UnicodeDecodeError:
             continue
         except OSError as e:
-            return [f"No se pudo leer el archivo: {e}"]
+            return [{
+                "type": "No se pudo leer el archivo",
+                "secret": str(e),
+                "line": None,
+            }]
     
     if content is None:
-        return ["No se pudo decodificar el archivo para escaneo"]
+        return [{
+            "type": "No se pudo decodificar el archivo para escaneo",
+            "secret": "Probablemente binario o formato inválido",
+            "line": None,
+        }]
 
     findings = []
     
@@ -179,25 +191,42 @@ def scan_file_for_secrets(path: Path) -> list[str]:
     def get_line_no(text, pos):
         return text.count("\n", 0, pos) + 1
 
+    # Para deduplicación por rango
+    occupied_ranges = []
+
+    def is_overlapping(start, end):
+        for o_start, o_end in occupied_ranges:
+            if not (end <= o_start or start >= o_end):
+                return True
+        return False
+
+    # 1. Patrones de alta confianza (Tokens específicos)
     for name, p in SECRET_PATTERNS.items():
         for match in p.finditer(content):
-            line = get_line_no(content, match.start())
+            start, end = match.span()
+            if is_overlapping(start, end): continue
+            
+            line = get_line_no(content, start)
             findings.append({
                 "type": name,
                 "secret": mask_secret(match.group(0)),
                 "line": line
             })
+            occupied_ranges.append((start, end))
     
+    # 2. Asignaciones sensibles (Contextuales)
     for name, p in SENSITIVE_ASSIGNMENT_PATTERNS.items():
-        # Para evitar duplicados si ya se encontró un token específico en esa zona
-        if any(f["type"] == name for f in findings): continue
         for match in p.finditer(content):
-            line = get_line_no(content, match.start())
+            start, end = match.span()
+            if is_overlapping(start, end): continue
+            
+            line = get_line_no(content, start)
             findings.append({
                 "type": name,
                 "secret": mask_secret(match.group(0)),
                 "line": line
             })
+            occupied_ranges.append((start, end))
     
     return findings
 

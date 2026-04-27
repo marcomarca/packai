@@ -54,6 +54,12 @@ uv run python pack_ai.py --copy path --output backup.zip C:\Proyectos\Mi App
 
 ### Opciones disponibles
 
+| Opción | Valores | Descripción |
+|---|---|---|
+| `--copy` | `file`, `path`, `none` | Define qué se copia al portapapeles (por defecto: `file`). |
+| `--output` | `[ruta]` | Define la ruta y nombre del ZIP generado (por defecto: carpeta_padre/nombre.zip). |
+| `--no-env-example` | (flag) | Si se usa, excluye archivos `.env.example`, `.env.sample` y `.env.template`. |
+
 ## 🛡️ Seguridad y Limitaciones
 
 **Pack AI** es una herramienta diseñada para **reducir el riesgo** de incluir secretos en tus paquetes para IA, pero **no garantiza una detección completa del 100%**. 
