@@ -63,7 +63,7 @@ packai . --copy path --output mi_respaldo.zip
 ## ⚙️ Configuración Personalizada
 
 - **`.aiignore`**: Permite definir patrones de exclusión simples (tipo `fnmatch`). Lo que coincida no entrará en el ZIP.
-- **`.aipass`**: Archivos que quieres incluir en el ZIP pero que **no quieres que sean escaneados**. Se mostrará una advertencia `⚠️` en la terminal para estos archivos.
+- **`.aipass`**: Permite incluir archivos que normalmente serían escaneados para saltarse el detector de secretos (útil para falsos positivos). **Nota importante**: No anula las exclusiones globales de seguridad (como `.git`, `node_modules`, `.env`, etc.); esos archivos siempre se ignorarán. Se mostrará una advertencia `⚠️` por seguridad.
 - **`config_pack_ai.py`**: Archivo central para cambiar comportamientos por defecto del script.
 
 ## 🛡️ Seguridad y Limitaciones
