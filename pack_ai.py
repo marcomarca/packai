@@ -278,9 +278,14 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
             filenames = sorted(filenames)
             
             rel_dir = Path(dirpath).relative_to(root)
-            depth = len(rel_dir.parts)
-            indent = "    " * depth
+            depth = len(rel_dir.parts) if rel_dir != Path(".") else 0
             
+            # Imprimir nombre de la subcarpeta (si no es la raíz)
+            if rel_dir != Path("."):
+                indent_dir = "    " * (depth - 1)
+                print(f"{indent_dir}    📁 {rel_dir.name}")
+            
+            indent_file = "    " * depth
             for f in filenames:
                 path = Path(dirpath) / f
                 if path.is_symlink():
@@ -296,7 +301,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 # 2. Saltarse el escáner pero incluir en ZIP
                 if should_ignore_path(rel, pass_patterns):
                     zipf.write(path, arcname=rel)
-                    print(f"{indent}📄 {f}")
+                    print(f"{indent_file}    📄 {f}")
                     incl += 1; continue
 
                 # 3. Detectar si es binario por contenido
@@ -314,7 +319,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                     ign += 1; continue
 
                 zipf.write(path, arcname=rel)
-                print(f"{indent}📄 {f}")
+                print(f"{indent_file}    📄 {f}")
                 incl += 1
     return incl, ign, findings
 

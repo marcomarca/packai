@@ -1,71 +1,68 @@
 # 📦 Pack AI
 
-**Pack AI** es una herramienta de línea de comandos (CLI) diseñada para empaquetar proyectos en archivos ZIP optimizados para el análisis con modelos de IA (como ChatGPT, Claude o Gemini).
+**Pack AI** es una herramienta de línea de comandos diseñada para empaquetar proyectos en un archivo ZIP optimizado para su revisión por Inteligencia Artificial (ChatGPT, Gemini, Claude, etc.), asegurando la exclusión de archivos pesados y reduciendo el riesgo de filtrar secretos.
 
-## ✨ Características Principales
+## ✨ Características principales
 
-- 🛡️ **Escaneo de Secretos Proactivo**: Detecta tokens de API (OpenAI, Groq, Anthropic, AWS, etc.) y asignaciones de variables sensibles en dos capas (Alta Confianza y Contextual).
-- 🚀 **Recorrido de Directorios Optimizado**: Ignora carpetas pesadas como `node_modules`, `.venv` o `.git` de forma recursiva sin siquiera entrar en ellas, garantizando una velocidad máxima.
-- 📋 **Integración con Portapapeles**: Copia automáticamente el archivo ZIP resultante (o su ruta) al portapapeles de Windows para que solo tengas que hacer `Ctrl+V` en tu chat de IA.
-- 🔒 **Seguridad Reforzada**: Salta automáticamente archivos de más de 1MB y enlaces simbólicos (`symlinks`) para evitar fugas de datos accidentales.
+- **🚀 Comando Global**: Instalación sencilla para usar `packai` desde cualquier carpeta.
+- **🛡️ Auditoría de Secretos**: Escaneo proactivo de claves API, tokens y credenciales con reportes detallados (tipo y número de línea).
+- **🌳 Visualización Estructurada**: Muestra un árbol real del contenido que se está empaquetando.
+- **📋 Copiado Automático**: Copia el archivo ZIP resultante directamente al portapapeles (en Windows).
+- **⚙️ Configuración Flexible**: Soporte para archivos `.aiignore` (exclusión total) y `.aipass` (inclusión sin escaneo).
+- **📄 Manejo Inteligente de Entornos**: Permite incluir archivos `.env.example` de forma segura (siempre que no contengan secretos reales).
 
-## ⚙️ Configuración de Exclusiones
+## 🚀 Instalación en Windows
 
-Puedes controlar qué archivos entran en el ZIP y cuáles se analizan mediante dos archivos opcionales:
+Para instalar `packai` como un comando global en tu sistema:
 
-### 1. `.aiignore` (Exclusión Total)
-Los archivos o carpetas que coincidan con los patrones de este archivo **no se incluirán en el ZIP**. Es ideal para dependencias, archivos binarios pesados o carpetas de build.
+1. Clona este repositorio.
+2. Abre una terminal en la carpeta del proyecto.
+3. Ejecuta el instalador automático:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install.ps1
+   ```
+4. **Reinicia tu terminal**. ¡Listo! Ahora puedes usar `packai` en cualquier sitio.
 
-### 2. `.aipass` (Bypass del Analizador)
-Los archivos que coincidan con los patrones de este archivo **se incluirán en el ZIP sin ser analizados por el escáner de secretos**.
-Es útil para archivos que contienen patrones que disparan falsos positivos pero que necesitas compartir con la IA (como este propio script).
-
-> [!CAUTION]
-> **ADVERTENCIA DE SEGURIDAD**: Los archivos listados en `.aipass` se añadirán "sí o sí" al ZIP sin ninguna verificación. Es extremadamente peligroso añadir aquí archivos que contengan llaves privadas reales, ya que el analizador no te avisará y podrías filtrarlas accidentalmente a la IA.
-
-## 🚀 Instalación
-
-Esta herramienta utiliza [uv](https://github.com/astral-sh/uv) para una gestión de dependencias ultrarrápida.
-
-```bash
-git clone <url-del-repo>
-cd pack_ai
-uv sync
+### Desinstalación
+Si deseas eliminar el rastro de la herramienta y el comando global:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
 ## 🛠️ Uso
 
 ```bash
-uv run python pack_ai.py [opciones] <ruta_del_proyecto>
-```
+# Empaquetar la carpeta actual
+packai
 
-> [!IMPORTANT]
-> **Orden de los argumentos**: Para soportar rutas con espacios sin necesidad de comillas, todas las opciones (como `--copy` o `--output`) deben escribirse **antes** de la ruta del proyecto. Cualquier cosa escrita después de la ruta será considerada parte del nombre de la carpeta.
+# Empaquetar una ruta específica
+packai C:\Ruta\De\Mi\Proyecto
 
-### Ejemplos
-
-```bash
-# Uso básico
-uv run python pack_ai.py C:\Proyectos\Mi App Increible
-
-# Con opciones (antes de la ruta)
-uv run python pack_ai.py --copy path --output backup.zip C:\Proyectos\Mi App
+# Opciones avanzadas (deben ir antes de la ruta)
+packai --copy path --output mi_respaldo.zip .
 ```
 
 ### Opciones disponibles
 
 | Opción | Valores | Descripción |
 |---|---|---|
-| `--copy` | `file`, `path`, `none` | Define qué se copia al portapapeles (por defecto: `file`). |
-| `--output` | `[ruta]` | Define la ruta y nombre del ZIP generado (por defecto: carpeta_padre/nombre.zip). |
-| `--no-env-example` | (flag) | Si se usa, excluye archivos `.env.example`, `.env.sample` y `.env.template`. |
+| `--copy` | `file`, `path`, `none` | Qué se copia al portapapeles (por defecto: `file`). |
+| `--output` | `[ruta]` | Ruta del ZIP generado (por defecto: `../nombre.zip`). |
+| `--no-env-example` | (flag) | Si se activa, excluye archivos `.env.example` y similares. |
+
+## ⚙️ Configuración Personalizada
+
+- **`.aiignore`**: Funciona como un `.gitignore`. Lo que pongas aquí no entrará en el ZIP.
+- **`.aipass`**: Archivos que quieres incluir en el ZIP pero que **no quieres que sean escaneados** (útil para archivos con claves falsas de test que el escáner bloquea por error).
+- **`config_pack_ai.py`**: Archivo central para cambiar comportamientos por defecto del script.
 
 ## 🛡️ Seguridad y Limitaciones
 
-**Pack AI** es una herramienta diseñada para **reducir el riesgo** de incluir secretos en tus paquetes para IA, pero **no garantiza una detección completa del 100%**. 
+**Pack AI** reduce el riesgo, pero **no garantiza una detección del 100%**. 
 
-- El escaneo se basa en patrones de expresiones regulares (regex). No puede detectar secretos en formatos no previstos o claves que no sigan un patrón reconocible.
-- El uso de `.aipass` desactiva el escaneo por completo para los archivos indicados.
-- Es una herramienta local y auditable: el código es transparente y no realiza peticiones de red.
+- El escaneo se basa en patrones Regex. No detecta secretos en formatos desconocidos.
+- Siempre revisa el reporte de "Excluidos" al finalizar el empaquetado.
+- Los archivos binarios y carpetas comunes (`node_modules`, `.git`, etc.) se ignoran por defecto para mantener el ZIP ligero.
 
-**Importante**: Revisa siempre el reporte de archivos incluidos y los hallazgos del escáner antes de compartir el contenido con una IA. La responsabilidad final de los datos compartidos es del usuario.
+---
+Desarrollado para optimizar el flujo de trabajo con IAs de código.
