@@ -234,7 +234,12 @@ def main():
     for f in findings: print(f"⚠️  {f}")
 
     if copy_zip(out_zip, args.copy):
-        st = "✅ ZIP copiado al portapapeles." if args.copy == "file" else "✅ Ruta copiada."
+        if args.copy == "file":
+            st = "✅ ZIP copiado al portapapeles."
+        elif args.copy == "path":
+            st = "✅ Ruta copiada."
+        else:
+            st = "✅ ZIP creado sin copiar."
     else:
         st = f"❌ Error al copiar. Archivo en: {out_zip}"
 
