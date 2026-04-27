@@ -351,8 +351,12 @@ def get_git_commit_info(root: Path) -> str | None:
 
 def sanitize_filename(name: str, max_length: int = 200) -> str:
     """Limpia el nombre para que sea un nombre de archivo válido y limita su longitud."""
-    invalid_chars = r'[\\/:*?"<>|]'
-    sanitized = re.sub(invalid_chars, "_", name)
+    # Reemplazar cualquier cosa que no sea alfanumérica, punto, guion o guion bajo por "_"
+    # Esto elimina espacios, corchetes, comas, etc. que dan problemas en algunas plataformas
+    sanitized = re.sub(r'[^a-zA-Z0-9.\-_]', "_", name)
+    # Limpiar guiones bajos consecutivos
+    sanitized = re.sub(r'_{2,}', "_", sanitized)
+    
     if len(sanitized) > max_length:
         return sanitized[:max_length-3] + "..."
     return sanitized
