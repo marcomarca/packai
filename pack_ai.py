@@ -370,10 +370,10 @@ def main():
     parser.add_argument("--output", help="Ruta del ZIP de salida.")
     parser.add_argument("--no-env-example", action="store_false", dest="include_env_example", 
                         default=CONFIG_INCLUDE_ENV, help="No incluir archivos .env.example.")
-    parser.add_argument("folder", nargs=argparse.REMAINDER, help="Carpeta a procesar.")
+    parser.add_argument("folder", nargs="?", default=".", help="Carpeta a procesar.")
     args = parser.parse_args()
 
-    f_path = " ".join(args.folder).strip() if args.folder else "."
+    f_path = args.folder
     root = Path(f_path).expanduser().resolve()
     if not root.exists():
         raise SystemExit(f"❌ La ruta no existe: {root}")
