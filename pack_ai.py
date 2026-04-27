@@ -383,6 +383,11 @@ def main():
 
     project_name = root.name if root.name else "project"
     safe_project_name = sanitize_filename(project_name) or "project"
+    
+    # Limitar nombre de proyecto para asegurar espacio al commit
+    if len(safe_project_name) > 80:
+        safe_project_name = safe_project_name[:77] + "..."
+    
     name = safe_project_name
     
     # Intentar obtener el nombre del último commit y su hash
@@ -393,14 +398,21 @@ def main():
         
         # El total debe ser de máximo 200 caracteres (incluyendo .zip)
         # Formato: [Project]-[Subject]-[Hash].zip
-        # .zip = 4 chars
+        # .zip = 4 chars, guion = 1 char
         max_total = 200
-        available_for_subject = max_total - len(safe_project_name) - len(suffix) - 5 # 1 guion extra y 4 de .zip
+        reserved = len(suffix) + 5
+        available_for_subject = max_total - len(safe_project_name) - reserved
         
-        if len(s_subject) > available_for_subject:
-            s_subject = s_subject[:available_for_subject-3] + "..."
-            
-        name = f"{safe_project_name}-{s_subject}{suffix}"
+        if available_for_subject > 3:
+            if len(s_subject) > available_for_subject:
+                s_subject = s_subject[:available_for_subject-3] + "..."
+            name = f"{safe_project_name}-{s_subject}{suffix}"
+        elif available_for_subject > 0:
+            # Si hay poco espacio, metemos lo que quepa sin elipsis o simplemente el guion
+            name = f"{safe_project_name}-{s_subject[:available_for_subject]}{suffix}"
+        else:
+            # Sin espacio para el sujeto
+            name = f"{safe_project_name}{suffix}"
 
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
