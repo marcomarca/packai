@@ -6,6 +6,7 @@ import subprocess
 import zipfile
 import unicodedata
 from pathlib import Path
+from typing import TypedDict, Union
 
 # Intentar cargar configuración externa
 try:
@@ -13,6 +14,16 @@ try:
     CONFIG_INCLUDE_ENV = getattr(config_pack_ai, "INCLUDE_ENV_EXAMPLE", True)
 except ImportError:
     CONFIG_INCLUDE_ENV = True
+
+class SecretFinding(TypedDict):
+    type: str
+    secret: str
+    line: Union[int, None]
+
+class FileFinding(TypedDict):
+    rel: str
+    details: list[SecretFinding]
+    reason: str
 
 def get_version():
     """Lee la versión desde pyproject.toml."""
@@ -171,7 +182,7 @@ def should_ignore_path(relative_path: str, patterns: list[str], include_env_exam
             return True
     return False
 
-def scan_file_for_secrets(path: Path) -> list[str]:
+def scan_file_for_secrets(path: Path) -> list[SecretFinding]:
     """Escanea el contenido de un archivo en busca de secretos."""
     if path.stat().st_size > 1024 * 1024:
         return [{
@@ -282,7 +293,7 @@ def copy_zip(zip_path: Path, mode: str) -> str:
         return "failed"
     return "failed"
 
-def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str], include_env_example: bool) -> tuple[int, int, list[str]]:
+def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str], include_env_example: bool) -> tuple[int, int, list[FileFinding]]:
     """Crea el archivo ZIP evitando entrar en directorios ignorados."""
     incl, ign, findings = 0, 0, []
     output_zip_res = output_zip.resolve()
