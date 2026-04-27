@@ -102,7 +102,10 @@ def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
 
 def scan_file_for_secrets(path: Path) -> list[str]:
     """Escanea el contenido de un archivo en busca de secretos."""
-    if path.name == "pack_ai.py" or path.stat().st_size > 1024 * 1024: return []
+    if path.name == "pack_ai.py": return []
+    if path.stat().st_size > 1024 * 1024:
+        return [f"Archivo demasiado grande para escaneo: {path.stat().st_size} bytes"]
+    
     findings = []
     for enc in ["utf-8", "utf-16", "latin-1"]:
         try:
