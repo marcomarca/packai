@@ -164,14 +164,19 @@ def copy_path_as_text(path: Path) -> bool:
     )
     return res.returncode == 0
 
-def copy_zip(zip_path: Path, mode: str) -> bool:
+def copy_zip(zip_path: Path, mode: str) -> str:
     """Gestiona el copiado del resultado según el modo elegido."""
-    if mode == "none": return True
-    if mode == "path": return copy_path_as_text(zip_path)
+    if mode == "none": return "none"
+    if mode == "path":
+        return "path" if copy_path_as_text(zip_path) else "failed"
     if mode == "file":
-        if copy_zip_with_powershell(zip_path): return True
-        return copy_path_as_text(zip_path)
-    return False
+        if copy_zip_with_powershell(zip_path):
+            return "file"
+        # Fallback a texto si falla el copiado del archivo real
+        if copy_path_as_text(zip_path):
+            return "path_fallback"
+        return "failed"
+    return "failed"
 
 def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str]) -> tuple[int, int, list[str]]:
     """Crea el archivo ZIP evitando entrar en directorios ignorados."""
@@ -233,15 +238,16 @@ def main():
     incl, ign, findings = create_zip(root, out_zip, ignore_patterns, pass_patterns)
     for f in findings: print(f"⚠️  {f}")
 
-    if copy_zip(out_zip, args.copy):
-        if args.copy == "file":
-            st = "✅ ZIP copiado al portapapeles."
-        elif args.copy == "path":
-            st = "✅ Ruta copiada."
-        else:
-            st = "✅ ZIP creado sin copiar."
-    else:
-        st = f"❌ Error al copiar. Archivo en: {out_zip}"
+    copy_res = copy_zip(out_zip, args.copy)
+    
+    status_msgs = {
+        "file": "✅ ZIP copiado al portapapeles.",
+        "path": "✅ Ruta copiada.",
+        "path_fallback": "⚠️ Fallo al copiar archivo; se copió la ruta como texto.",
+        "none": "✅ ZIP creado sin copiar.",
+        "failed": f"❌ Error al copiar. Archivo en: {out_zip}",
+    }
+    st = status_msgs.get(copy_res, status_msgs["failed"])
 
     print("-" * 30 + f"\nIncluidos: {incl} | Ignorados: {ign}\n{st}\n" + "-" * 30)
 
