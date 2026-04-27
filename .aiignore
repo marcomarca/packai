@@ -1,0 +1,16 @@
+# Archivos internos del proyecto pack_ai
+.uv-cache/
+.python-version
+implementation_plan.md
+task.md
+walkthrough.md
+
+# Archivos de prueba (ejemplos)
+tests/data/
+backups/
+
+# Archivos grandes o binarios
+*.mp4
+*.mov
+*.psd
+*.iso
