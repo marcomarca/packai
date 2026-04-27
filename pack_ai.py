@@ -208,7 +208,10 @@ def main():
 
     f_path = " ".join(args.folder).strip() if args.folder else "."
     root = Path(f_path).expanduser().resolve()
-    if not root.exists() or not root.is_dir(): return
+    if not root.exists():
+        raise SystemExit(f"❌ La ruta no existe: {root}")
+    if not root.is_dir():
+        raise SystemExit(f"❌ La ruta no es una carpeta: {root}")
 
     name = root.name if root.name else "project"
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
