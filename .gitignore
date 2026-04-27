@@ -1,10 +1,26 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
 
-# Virtual environments
-.venv
+# Uv
+.uv-cache/
+
+# Pack AI
+*.zip
+*.log
+.aipass
+
+# Secretos y Configuración
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json

@@ -45,6 +45,12 @@ uv run python pack_ai.py <ruta_del_proyecto>
 - `--copy path`: Copia la ruta absoluta.
 - `--copy none`: No copia nada.
 
-## 🛡️ Seguridad
+## 🛡️ Seguridad y Limitaciones
 
-Pack AI es **auditable y seguro**. No requiere dependencias externas y utiliza comandos nativos de Windows (PowerShell). El escaneo de secretos nunca envía datos fuera de tu máquina local.
+**Pack AI** es una herramienta diseñada para **reducir el riesgo** de incluir secretos en tus paquetes para IA, pero **no garantiza una detección completa del 100%**. 
+
+- El escaneo se basa en patrones de expresiones regulares (regex). No puede detectar secretos en formatos no previstos o claves que no sigan un patrón reconocible.
+- El uso de `.aipass` desactiva el escaneo por completo para los archivos indicados.
+- Es una herramienta local y auditable: el código es transparente y no realiza peticiones de red.
+
+**Importante**: Revisa siempre el reporte de archivos incluidos y los hallazgos del escáner antes de compartir el contenido con una IA. La responsabilidad final de los datos compartidos es del usuario.

@@ -17,12 +17,13 @@ IGNORED_DIR_NAMES = {
 DEFAULT_IGNORE = [
     "*.log", "*.tmp", "*.cache", "*.zip", "*.tar", "*.gz", "*.rar", "*.7z",
     "*.sqlite", "*.db", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.mp4",
-    "*.mov", "*.pdf", "*.xlsx", "*.docx",
+    "*.mov", "*.pdf", "*.xlsx", "*.docx", "*.exe", "*.dll", "*.so", "*.dylib",
+    "*.jar", "*.war", "*.wasm", "*.bin", "*.dat", "*.class", "*.o", "*.obj",
 ]
 
 # Archivos sensibles que se excluyen siempre por nombre
 SECRET_FILE_PATTERNS = [
-    ".env", ".env.*", "*.env", "*.pem", "*.key", "*.p8", "*.p12", "*.pfx",
+    ".aipass", ".env", ".env.*", "*.env", "*.pem", "*.key", "*.p8", "*.p12", "*.pfx",
     "*.crt", "*.cer", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
     "known_hosts", "authorized_keys", ".npmrc", ".pypirc", ".netrc", ".dockercfg",
     "docker-compose.override.yml", "credentials", "credentials.json",
@@ -99,6 +100,15 @@ def load_aiignore(root: Path) -> list[str]:
 def load_aipass(root: Path) -> list[str]:
     """Carga patrones de archivos que saltan el escáner pero se incluyen en el ZIP."""
     return load_ignore_file(root / ".aipass")
+
+def is_probably_binary(path: Path, sample_size: int = 4096) -> bool:
+    """Detecta si un archivo es probablemente binario buscando bytes nulos."""
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(sample_size)
+        return b"\x00" in chunk
+    except OSError:
+        return True
 
 def should_ignore_path(relative_path: str, patterns: list[str]) -> bool:
     """Verifica si una ruta debe ser ignorada por nombre o patrón."""
@@ -220,7 +230,11 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                     zipf.write(path, arcname=rel)
                     incl += 1; continue
 
-                # 3. Escaneo normal
+                # 3. Detectar si es binario por contenido
+                if is_probably_binary(path):
+                    ign += 1; continue
+
+                # 4. Escaneo normal
                 f_findings = scan_file_for_secrets(path)
                 if f_findings:
                     findings.append(f"SALTADO ({', '.join(f_findings)}): {rel}")
