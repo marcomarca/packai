@@ -119,16 +119,25 @@ def scan_file_for_secrets(path: Path) -> list[str]:
     return findings
 
 def copy_zip_with_powershell(zip_path: Path) -> bool:
-    """Copia el ZIP al portapapeles de Windows (objeto pegable)."""
-    p_esc = str(zip_path.resolve()).replace("'", "''")
-    cmd = f"Set-Clipboard -LiteralPath '{p_esc}'"
-    res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True)
+    """Copia el ZIP al portapapeles de Windows como archivo pegable."""
+    zip_path = Path(zip_path).expanduser().resolve()
+    if not zip_path.exists() or not zip_path.is_file(): return False
+
+    # Usamos un bloque de script para que PowerShell asigne los argumentos a $args
+    script = "& { Set-Clipboard -LiteralPath $args[0] }"
+    res = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", script, str(zip_path)],
+        capture_output=True, text=True
+    )
     return res.returncode == 0
 
 def copy_path_as_text(path: Path) -> bool:
     """Copia la ruta absoluta al portapapeles como texto."""
-    cmd = "Set-Clipboard -Value $args[0]"
-    res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd, str(path.resolve())], capture_output=True, text=True)
+    script = "& { Set-Clipboard -Value $args[0] }"
+    res = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", script, str(path.resolve())],
+        capture_output=True, text=True
+    )
     return res.returncode == 0
 
 def copy_zip(zip_path: Path, mode: str) -> bool:
