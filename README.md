@@ -76,3 +76,6 @@ packai . --copy path --output mi_respaldo.zip
 
 ---
 Desarrollado para optimizar el flujo de trabajo con IAs de código.
+
+
+[] tiene que optimizarse para que acepte ignorar rutas de folders de un proyecto especifico facilmente desde el cli

@@ -44,7 +44,7 @@ VERSION = get_version()
 IGNORED_DIR_NAMES = {
     ".git", "node_modules", ".venv", "venv", "env", "__pycache__",
     "dist", "build", ".next", ".nuxt", "coverage", ".pytest_cache",
-    ".mypy_cache", ".idea", ".vscode", ".cache", "target",
+    ".mypy_cache", ".ruff_cache", ".uv-cache", ".idea", ".vscode", ".cache", "target",
 }
 
 # Extensiones o patrones de archivos basura adicionales
