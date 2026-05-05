@@ -83,10 +83,10 @@ def test_nested_directory_ignore(temp_project):
     (backup_dir / "old.py").write_text("old code")
     
     patterns = ["backups/"]
-    assert should_ignore_path("foo/backups/old.py", patterns) == True
-    assert should_ignore_path("backups/old.py", patterns) == True
-    assert should_ignore_path("src/backups/old.py", patterns) == True
-    assert should_ignore_path("important_backups/old.py", patterns) == False
+    assert should_ignore_path("foo/backups/old.py", patterns) == "pattern"
+    assert should_ignore_path("backups/old.py", patterns) == "pattern"
+    assert should_ignore_path("src/backups/old.py", patterns) == "pattern"
+    assert should_ignore_path("important_backups/old.py", patterns) is None
 
 def test_copy_zip_modes():
     """Verifica los retornos de estado de copy_zip."""
@@ -143,3 +143,50 @@ def test_get_git_commit_info_fail():
         subject, short_hash = get_git_commit_info(Path("."))
         assert subject is None
         assert short_hash is None
+
+def test_force_inclusion_with_secret(temp_project):
+    """Verifica que --force incluya archivos con secretos."""
+    secret_file = temp_project / "secret.txt"
+    secret_file.write_text("OPENAI_KEY=" + "sk" + "-12345678901234567890123456789012", encoding="utf-8")
+    
+    zip_path = temp_project.parent / "test_force.zip"
+    # force=True
+    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True)
+    
+    assert incl == 1
+    assert len(findings) == 1
+    assert findings[0]["forced"] is True
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert "secret.txt" in z.namelist()
+
+def test_strict_env_exclusion_even_with_force(temp_project):
+    """Verifica que .env se excluya SIEMPRE, incluso con --force."""
+    env_file = temp_project / ".env"
+    env_file.write_text("DB_PASSWORD=123", encoding="utf-8")
+    
+    zip_path = temp_project.parent / "test_env.zip"
+    # force=True
+    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True)
+    
+    assert incl == 0
+    assert ign >= 1
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert ".env" not in z.namelist()
+
+def test_sensitive_filename_forced(temp_project):
+    """Verifica que archivos con nombres sensibles se incluyan con --force."""
+    key_file = temp_project / "id_rsa.pub" # .pub is not in SECRET_FILE_PATTERNS but id_rsa is?
+    # Wait, SECRET_FILE_PATTERNS has "id_rsa"
+    key_file = temp_project / "id_rsa"
+    key_file.write_text("ssh-rsa ...", encoding="utf-8")
+    
+    zip_path = temp_project.parent / "test_sensitive.zip"
+    
+    # Without force
+    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=False)
+    assert incl == 0
+    
+    # With force
+    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True)
+    assert incl == 1
+    assert any(f["reason"] == "sensitive_forced" for f in findings)

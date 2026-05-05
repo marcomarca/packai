@@ -151,36 +151,47 @@ def is_probably_binary(path: Path, sample_size: int = 4096) -> bool:
     except OSError:
         return True
 
-def should_ignore_path(relative_path: str, patterns: list[str], include_env_example: bool = True) -> bool:
-    """Verifica si una ruta debe ser ignorada por nombre o patrón."""
+def should_ignore_path(relative_path: str, patterns: list[str], include_env_example: bool = True, ignore_secrets: bool = False) -> Union[str, None]:
+    """
+    Verifica si una ruta debe ser ignorada. 
+    Retorna el tipo de ignore ('strict', 'sensitive', 'pattern') o None.
+    """
     normalized = relative_path.replace("\\", "/")
     path_obj = Path(normalized)
     parts = path_obj.parts
     name = path_obj.name
 
-    # Ignorar si algún directorio en la ruta está en la lista negra
+    # 1. Directorios bloqueados siempre
     if any(part in IGNORED_DIR_NAMES for part in parts):
-        return True
+        return "strict"
 
-    # Comprobar contra lista de archivos secretos (con excepción para ejemplos si está activo)
+    # 2. .env y secretos
     is_safe_env = include_env_example and name in SAFE_ENV_EXAMPLES
-    if not is_safe_env:
-        if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS):
-            return True
     
+    if not is_safe_env:
+        # El usuario pide que .env NUNCA pase
+        if name == ".env" or fnmatch.fnmatch(name, ".env.*") or fnmatch.fnmatch(name, "*.env"):
+            return "strict"
+        
+        # Otros archivos potencialmente sensibles son bypassable con --force
+        if not ignore_secrets:
+            if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS):
+                return "sensitive"
+    
+    # 3. Patrones de usuario (aiignore, defaults, aipass)
     for p in patterns:
         p = p.strip().replace("\\", "/")
         if not p: continue
         
         if p.endswith("/"):
             dir_p = p.rstrip("/")
-            # Comprobar si el patrón es un segmento completo de la ruta
             if normalized.startswith(p) or f"/{dir_p}/" in f"/{normalized}/":
-                return True
+                return "pattern"
         
         if fnmatch.fnmatch(normalized, p) or fnmatch.fnmatch(name, p):
-            return True
-    return False
+            return "pattern"
+            
+    return None
 
 def scan_file_for_secrets(path: Path) -> list[SecretFinding]:
     """Escanea el contenido de un archivo en busca de secretos."""
@@ -293,13 +304,13 @@ def copy_zip(zip_path: Path, mode: str) -> str:
         return "failed"
     return "failed"
 
-def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str], include_env_example: bool) -> tuple[int, int, list[FileFinding]]:
+def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str], include_env_example: bool, force: bool = False) -> tuple[int, int, list[FileFinding]]:
     """Crea el archivo ZIP evitando entrar en directorios ignorados."""
     incl, ign, findings = 0, 0, []
     output_zip_res = output_zip.resolve()
 
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
-        print(f"📁 {root.name}")
+        print(f"Empaquetando: {root.name}...")
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = sorted([d for d in dirnames if d not in IGNORED_DIR_NAMES])
             filenames = sorted(filenames)
@@ -321,12 +332,20 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 
                 rel = path.relative_to(root).as_posix()
                 
-                # 1. Exclusión total del ZIP
-                if should_ignore_path(rel, ignore_patterns, include_env_example):
+                # 1. Exclusión por nombre/patrón
+                ignore_type = should_ignore_path(rel, ignore_patterns, include_env_example)
+                
+                if ignore_type in ("strict", "pattern"):
                     ign += 1; continue
                 
-                # 2. Saltarse el escáner pero incluir en ZIP
-                if should_ignore_path(rel, pass_patterns):
+                forced_by_name = False
+                if ignore_type == "sensitive":
+                    if not force:
+                        ign += 1; continue
+                    forced_by_name = True
+                
+                # 2. .aipass (bypass scanner)
+                if should_ignore_path(rel, pass_patterns, ignore_secrets=True) == "pattern":
                     zipf.write(path, arcname=rel)
                     print(f"{indent_file}    ⚠️  Incluido sin escaneo por .aipass: {f}")
                     incl += 1; continue
@@ -341,12 +360,23 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                     findings.append({
                         "rel": rel,
                         "details": f_findings,
-                        "reason": "secret_found"
+                        "reason": "secret_found",
+                        "forced": force
                     })
-                    ign += 1; continue
+                    if not force:
+                        ign += 1; continue
+                    # Si force=True, continuamos para escribirlo
+                elif forced_by_name:
+                    findings.append({
+                        "rel": rel,
+                        "details": [{"type": "Nombre sensible forzado", "secret": "Coincide con patrón de seguridad", "line": None}],
+                        "reason": "sensitive_forced",
+                        "forced": True
+                    })
 
                 zipf.write(path, arcname=rel)
-                print(f"{indent_file}    📄 {f}")
+                status_icon = "🚀" if (f_findings or forced_by_name) else "📄"
+                print(f"{indent_file}    {status_icon} {f}")
                 incl += 1
     return incl, ign, findings
 
@@ -392,6 +422,7 @@ def main():
     parser.add_argument("--version", "-v", action="version", version=f"Pack AI {VERSION}")
     parser.add_argument("--copy", choices=["file", "path", "none"], default="file", help="Modo de copiado.")
     parser.add_argument("--output", help="Ruta del ZIP de salida.")
+    parser.add_argument("--force", "-f", action="store_true", help="Forzar inclusión de archivos con alertas (excepto .env).")
     parser.add_argument("--no-env-example", action="store_false", dest="include_env_example", 
                         default=CONFIG_INCLUDE_ENV, help="No incluir archivos .env.example.")
     parser.add_argument("folder", nargs="?", default=".", help="Carpeta a procesar.")
@@ -441,17 +472,22 @@ def main():
 
     ignore_patterns = DEFAULT_IGNORE + load_aiignore(root)
     pass_patterns = load_aipass(root)
-    print(f"Empaquetando: {root.name}...")
     
-    incl, ign, total_findings = create_zip(root, out_zip, ignore_patterns, pass_patterns, args.include_env_example)
+    incl, ign, total_findings = create_zip(root, out_zip, ignore_patterns, pass_patterns, args.include_env_example, args.force)
     
     for f in total_findings:
-        print(f"⚠️  Excluido: {f['rel']}")
+        is_forced = f.get("forced", False)
+        status = "INCLUIDO (FORZADO)" if is_forced else "EXCLUIDO"
+        icon = "🚀" if is_forced else "⚠️"
+        
+        print(f"{icon}  {status}: {f['rel']}")
         for d in f['details']:
             print(f"    Tipo: {d['type']}")
             if d.get('line'): print(f"    Línea: {d['line']}")
             print(f"    Secreto: {d['secret']}")
-        print(f"    Acción: omitido del ZIP\n")
+        
+        action = "añadido al ZIP a pesar de la alerta" if is_forced else "omitido del ZIP"
+        print(f"    Acción: {action}\n")
 
     copy_res = copy_zip(out_zip, args.copy)
     
