@@ -64,7 +64,7 @@ packai . --copy path --output mi_respaldo.zip
 ## ⚙️ Configuración Personalizada
 
 - **`.aiignore`**: Permite definir patrones de exclusión simples (tipo `fnmatch`). Lo que coincida no entrará en el ZIP.
-- **`.aipass`**: Permite incluir archivos que normalmente serían escaneados para saltarse el detector de secretos (útil para falsos positivos). **Nota importante**: No anula las exclusiones globales de seguridad (como `.git`, `node_modules`, `.env`, etc.); esos archivos siempre se ignorarán. Se mostrará una advertencia `⚠️` por seguridad.
+- **`.aipass`**: Permite incluir archivos que normalmente serían escaneados para saltarse el detector de secretos (útil para falsos positivos). **Nota importante**: No anula las exclusiones globales de seguridad (como `.git`, `node_modules`, carpetas ocultas tipo `.tmp/` o `.uv-python/`, `.env`, etc.); esos archivos siempre se ignorarán. Se mostrará una advertencia `⚠️` por seguridad.
 - **`config_pack_ai.py`**: Archivo central para cambiar comportamientos por defecto del script.
 
 ## 🛡️ Seguridad y Limitaciones
@@ -73,7 +73,7 @@ packai . --copy path --output mi_respaldo.zip
 
 - El escaneo se basa en patrones Regex. No detecta secretos en formatos desconocidos.
 - Siempre revisa el reporte de "Excluidos" al finalizar el empaquetado.
-- Los archivos binarios y carpetas comunes (`node_modules`, `.git`, etc.) se ignoran por defecto para mantener el ZIP ligero.
+- Los archivos binarios, carpetas comunes (`node_modules`, `.git`, etc.) y carpetas ocultas genéricas (`.tmp/`, `.uv-python/`, etc.) se ignoran por defecto para mantener el ZIP ligero. Esta regla aplica a carpetas, no a archivos con punto en el nombre.
 
 ---
 Desarrollado para optimizar el flujo de trabajo con IAs de código.

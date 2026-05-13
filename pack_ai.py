@@ -47,6 +47,9 @@ IGNORED_DIR_NAMES = {
     ".mypy_cache", ".ruff_cache", ".uv-cache", ".idea", ".vscode", ".cache", "target",
 }
 
+# Directorios ocultos que si suelen aportar contexto al revisar el proyecto.
+ALLOWED_DOT_DIR_NAMES = {".github"}
+
 # Extensiones o patrones de archivos basura adicionales
 DEFAULT_IGNORE = [
     "*.log", "*.tmp", "*.cache", "*.zip", "*.tar", "*.gz", "*.rar", "*.7z",
@@ -151,18 +154,25 @@ def is_probably_binary(path: Path, sample_size: int = 4096) -> bool:
     except OSError:
         return True
 
+def is_ignored_dir_name(name: str) -> bool:
+    """Detecta directorios globalmente excluidos, incluyendo ocultos tipo .tmp/."""
+    return name in IGNORED_DIR_NAMES or (name.startswith(".") and name not in ALLOWED_DOT_DIR_NAMES)
+
 def should_ignore_path(relative_path: str, patterns: list[str], include_env_example: bool = True, ignore_secrets: bool = False) -> Union[str, None]:
     """
     Verifica si una ruta debe ser ignorada. 
     Retorna el tipo de ignore ('strict', 'sensitive', 'pattern') o None.
     """
     normalized = relative_path.replace("\\", "/")
+    is_dir_path = normalized.endswith("/")
     path_obj = Path(normalized)
     parts = path_obj.parts
     name = path_obj.name
 
-    # 1. Directorios bloqueados siempre
-    if any(part in IGNORED_DIR_NAMES for part in parts):
+    # 1. Directorios bloqueados siempre. Solo se revisan componentes padre para
+    # no excluir archivos como .env.example por la regla de directorios ocultos.
+    dir_parts = parts if is_dir_path else parts[:-1]
+    if any(is_ignored_dir_name(part) for part in dir_parts):
         return "strict"
 
     # 2. .env y secretos
@@ -312,7 +322,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
         print(f"Empaquetando: {root.name}...")
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = sorted([d for d in dirnames if d not in IGNORED_DIR_NAMES])
+            dirnames[:] = sorted([d for d in dirnames if not is_ignored_dir_name(d)])
             filenames = sorted(filenames)
             
             rel_dir = Path(dirpath).relative_to(root)

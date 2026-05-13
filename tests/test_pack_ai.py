@@ -88,6 +88,42 @@ def test_nested_directory_ignore(temp_project):
     assert should_ignore_path("src/backups/old.py", patterns) == "pattern"
     assert should_ignore_path("important_backups/old.py", patterns) is None
 
+def test_hidden_dot_directories_are_strictly_ignored(temp_project):
+    """Verifica que carpetas ocultas genéricas se excluyan globalmente."""
+    assert should_ignore_path(".tmp/", []) == "strict"
+    assert should_ignore_path(".tmp/cache.py", []) == "strict"
+    assert should_ignore_path("src/.uv-python/", []) == "strict"
+    assert should_ignore_path("src/.uv-python/bin/python", []) == "strict"
+    assert should_ignore_path(".cache/data.json", []) == "strict"
+
+def test_dot_files_are_not_ignored_by_hidden_directory_rule(temp_project):
+    """Verifica que la regla de carpetas ocultas no afecte archivos con punto."""
+    assert should_ignore_path(".python-version", []) is None
+    assert should_ignore_path(".env.example", []) is None
+
+def test_allowed_dot_directories_are_not_globally_ignored(temp_project):
+    """Verifica excepciones de carpetas ocultas que si aportan contexto."""
+    assert should_ignore_path(".github/workflows/ci.yml", []) is None
+
+def test_hidden_dot_directory_excluded_from_zip(temp_project):
+    """Verifica que os.walk no entre a carpetas ocultas excluidas."""
+    hidden_dir = temp_project / ".tmp"
+    hidden_dir.mkdir()
+    (hidden_dir / "cache.py").write_text("print('cache')", encoding="utf-8")
+    (temp_project / ".python-version").write_text("3.12", encoding="utf-8")
+    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
+
+    zip_path = temp_project.parent / "test_hidden_dirs.zip"
+    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
+
+    assert incl == 2
+    assert findings == []
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        assert "code.py" in names
+        assert ".python-version" in names
+        assert ".tmp/cache.py" not in names
+
 def test_copy_zip_modes():
     """Verifica los retornos de estado de copy_zip."""
     # No necesitamos un zip real para el modo 'none'
