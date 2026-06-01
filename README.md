@@ -59,7 +59,7 @@ packai . --copy path --output mi_respaldo.zip
 | `--copy` | `file`, `path`, `none` | Qué se copia al portapapeles (por defecto: `file`). |
 | `--output` | `[ruta]` | Ruta del ZIP generado. Por defecto se nombra como `[Proyecto]-[Commit]-[Hash].zip`. |
 | `--force`, `-f` | (flag) | Forzar la inclusión de archivos con alertas de seguridad (falsos positivos), **excepto archivos .env y variantes** que siempre se excluyen. |
-| `-g` | (flag) | Incluye `AI_GIT_CONTEXT.md` con el diff del último commit confirmado. |
+| `-g` | (flag) | Incluye `git--diff_last_commit.md` con el diff del último commit confirmado. |
 | `--no-env-example` | (flag) | Si se activa, excluye archivos `.env.example` y similares. |
 
 ### Incluir contexto del último commit
@@ -68,7 +68,7 @@ packai . --copy path --output mi_respaldo.zip
 packai . -g
 ```
 
-Incluye dentro del ZIP un archivo `AI_GIT_CONTEXT.md` con metadatos, archivos cambiados, estadísticas y diff del último commit confirmado (`HEAD`).
+Incluye dentro del ZIP un archivo `git--diff_last_commit.md` con metadatos, archivos cambiados, estadísticas y diff del último commit confirmado (`HEAD`).
 
 ```bash
 packai . -gf
@@ -78,7 +78,7 @@ Combina `-g` con `-f`. Incluye el contexto Git y activa el modo force para inclu
 
 El contexto Git no incluye cambios sin commit.
 
-Los archivos `.env`, `.env.local`, `.env.production` y variantes reales nunca se incluyen, ni en el ZIP normal ni dentro de `AI_GIT_CONTEXT.md`, incluso usando `-f`. Los ejemplos `.env.example`, `.env.sample` y `.env.template` pueden incluirse si no contienen secretos; `--no-env-example` los excluye.
+Los archivos `.env`, `.env.local`, `.env.production` y variantes reales nunca se incluyen, ni en el ZIP normal ni dentro de `git--diff_last_commit.md`, incluso usando `-f`. Los ejemplos `.env.example`, `.env.sample` y `.env.template` pueden incluirse si no contienen secretos; `--no-env-example` los excluye.
 
 ## ⚙️ Configuración Personalizada
 

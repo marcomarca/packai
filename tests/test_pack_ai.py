@@ -9,6 +9,7 @@ from pack_ai import (
     build_parser,
     create_zip,
     get_git_commit_info,
+    GIT_CONTEXT_FILENAME,
     scan_file_for_secrets,
     should_ignore_path,
     copy_zip,
@@ -279,7 +280,7 @@ def test_git_context_not_included_by_default(temp_project):
 
     mock_build.assert_not_called()
     with zipfile.ZipFile(zip_path, "r") as z:
-        assert "AI_GIT_CONTEXT.md" not in z.namelist()
+        assert GIT_CONTEXT_FILENAME not in z.namelist()
 
 def test_git_context_included_with_g(temp_project):
     (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
@@ -290,8 +291,8 @@ def test_git_context_included_with_g(temp_project):
         create_zip(temp_project, zip_path, [], [], True, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
-        assert "AI_GIT_CONTEXT.md" in z.namelist()
-        assert "+print('hello')" in z.read("AI_GIT_CONTEXT.md").decode("utf-8")
+        assert GIT_CONTEXT_FILENAME in z.namelist()
+        assert "+print('hello')" in z.read(GIT_CONTEXT_FILENAME).decode("utf-8")
 
 def test_git_context_secret_excluded_without_force(temp_project):
     (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
@@ -302,7 +303,7 @@ def test_git_context_secret_excluded_without_force(temp_project):
         incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=False, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
-        assert "AI_GIT_CONTEXT.md" not in z.namelist()
+        assert GIT_CONTEXT_FILENAME not in z.namelist()
     assert any(f["reason"] == "git_context_secret_found" and f["forced"] is False for f in findings)
 
 def test_git_context_secret_included_with_force(temp_project):
@@ -314,11 +315,11 @@ def test_git_context_secret_included_with_force(temp_project):
         incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
-        assert "AI_GIT_CONTEXT.md" in z.namelist()
+        assert GIT_CONTEXT_FILENAME in z.namelist()
     assert any(f["reason"] == "git_context_secret_found" and f["forced"] is True for f in findings)
 
 def test_git_context_collision_is_not_overwritten(temp_project):
-    (temp_project / "AI_GIT_CONTEXT.md").write_text("REAL FILE", encoding="utf-8")
+    (temp_project / GIT_CONTEXT_FILENAME).write_text("REAL FILE", encoding="utf-8")
     zip_path = temp_project.parent / "test.zip"
 
     with patch("pack_ai.build_git_context_markdown", return_value=("GENERATED FILE", None)):
@@ -326,8 +327,8 @@ def test_git_context_collision_is_not_overwritten(temp_project):
 
     with zipfile.ZipFile(zip_path, "r") as z:
         names = z.namelist()
-        assert names.count("AI_GIT_CONTEXT.md") == 1
-        content = z.read("AI_GIT_CONTEXT.md").decode("utf-8")
+        assert names.count(GIT_CONTEXT_FILENAME) == 1
+        content = z.read(GIT_CONTEXT_FILENAME).decode("utf-8")
         assert content == "REAL FILE"
         assert "GENERATED FILE" not in content
 

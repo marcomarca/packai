@@ -83,6 +83,7 @@ SECRET_FILE_PATTERNS = [
 
 # Archivos de ejemplo de entorno que pueden permitirse (se escanean igual)
 SAFE_ENV_EXAMPLES = {".env.example", ".env.sample", ".env.template"}
+GIT_CONTEXT_FILENAME = "git--diff_last_commit.md"
 
 # Patrones de alta confianza para tokens con prefijo
 SECRET_PATTERNS = {
@@ -509,7 +510,7 @@ def create_zip(
                 incl += 1
 
         if include_git_context:
-            git_context_arcname = "AI_GIT_CONTEXT.md"
+            git_context_arcname = GIT_CONTEXT_FILENAME
             if git_context_arcname in included_names:
                 print(f"⚠️  Ya existe {git_context_arcname}; no se generó contexto Git para evitar duplicados.")
                 ign += 1
@@ -597,7 +598,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-g",
         action="store_true",
         dest="include_git_context",
-        help="Incluye AI_GIT_CONTEXT.md con el diff del último commit confirmado."
+        help=f"Incluye {GIT_CONTEXT_FILENAME} con el diff del último commit confirmado."
     )
     parser.add_argument("--no-env-example", action="store_false", dest="include_env_example", 
                         default=CONFIG_INCLUDE_ENV, help="No incluir archivos .env.example.")
