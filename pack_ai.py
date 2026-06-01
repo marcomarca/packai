@@ -59,6 +59,13 @@ DEFAULT_IGNORE = [
 ]
 
 # Archivos sensibles que se excluyen siempre por nombre
+STRICT_EXCLUDE_PATTERNS = [
+    ".env",
+    ".env.*",
+    "**/.env",
+    "**/.env.*",
+]
+
 SECRET_FILE_PATTERNS = [
     ".aipass", ".env", ".env.*", "*.env", "*.pem", "*.key", "*.p8", "*.p12", "*.pfx",
     "*.crt", "*.cer", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
@@ -158,6 +165,11 @@ def is_ignored_dir_name(name: str) -> bool:
     """Detecta directorios globalmente excluidos, incluyendo ocultos tipo .tmp/."""
     return name in IGNORED_DIR_NAMES or (name.startswith(".") and name not in ALLOWED_DOT_DIR_NAMES)
 
+def matches_any_path_pattern(relative_path: str, patterns: list[str]) -> bool:
+    normalized = relative_path.replace("\\", "/")
+    name = Path(normalized).name
+    return any(fnmatch.fnmatch(normalized, p) or fnmatch.fnmatch(name, p) for p in patterns)
+
 def should_ignore_path(relative_path: str, patterns: list[str], include_env_example: bool = True, ignore_secrets: bool = False) -> Union[str, None]:
     """
     Verifica si una ruta debe ser ignorada. 
@@ -173,6 +185,9 @@ def should_ignore_path(relative_path: str, patterns: list[str], include_env_exam
     # no excluir archivos como .env.example por la regla de directorios ocultos.
     dir_parts = parts if is_dir_path else parts[:-1]
     if any(is_ignored_dir_name(part) for part in dir_parts):
+        return "strict"
+
+    if matches_any_path_pattern(normalized, STRICT_EXCLUDE_PATTERNS):
         return "strict"
 
     # 2. .env y secretos
@@ -203,36 +218,8 @@ def should_ignore_path(relative_path: str, patterns: list[str], include_env_exam
             
     return None
 
-def scan_file_for_secrets(path: Path) -> list[SecretFinding]:
-    """Escanea el contenido de un archivo en busca de secretos."""
-    if path.stat().st_size > 1024 * 1024:
-        return [{
-            "type": "Archivo demasiado grande para escaneo",
-            "secret": f"{path.stat().st_size} bytes",
-            "line": None,
-        }]
-    
-    content = None
-    for enc in ["utf-8", "utf-16", "latin-1"]:
-        try:
-            content = path.read_text(encoding=enc, errors="strict")
-            break
-        except UnicodeDecodeError:
-            continue
-        except OSError as e:
-            return [{
-                "type": "No se pudo leer el archivo",
-                "secret": str(e),
-                "line": None,
-            }]
-    
-    if content is None:
-        return [{
-            "type": "No se pudo decodificar el archivo para escaneo",
-            "secret": "Probablemente binario o formato inválido",
-            "line": None,
-        }]
-
+def scan_text_for_secrets(content: str) -> list[SecretFinding]:
+    """Escanea texto en busca de secretos."""
     findings = []
     
     # Función auxiliar para calcular línea
@@ -278,6 +265,125 @@ def scan_file_for_secrets(path: Path) -> list[SecretFinding]:
     
     return findings
 
+def scan_file_for_secrets(path: Path) -> list[SecretFinding]:
+    """Escanea el contenido de un archivo en busca de secretos."""
+    if path.stat().st_size > 1024 * 1024:
+        return [{
+            "type": "Archivo demasiado grande para escaneo",
+            "secret": f"{path.stat().st_size} bytes",
+            "line": None,
+        }]
+
+    content = None
+    for enc in ["utf-8", "utf-16", "latin-1"]:
+        try:
+            content = path.read_text(encoding=enc, errors="strict")
+            break
+        except UnicodeDecodeError:
+            continue
+        except OSError as e:
+            return [{
+                "type": "No se pudo leer el archivo",
+                "secret": str(e),
+                "line": None,
+            }]
+
+    if content is None:
+        return [{
+            "type": "No se pudo decodificar el archivo para escaneo",
+            "secret": "Probablemente binario o formato inválido",
+            "line": None,
+        }]
+
+    return scan_text_for_secrets(content)
+
+def run_git_command(root: Path, args: list[str]) -> str | None:
+    try:
+        res = subprocess.run(
+            ["git", *args],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
+        return res.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+def build_git_context_markdown(root: Path) -> tuple[str | None, str | None]:
+    inside = run_git_command(root, ["rev-parse", "--is-inside-work-tree"])
+    if inside != "true":
+        return None, "no es un repositorio Git"
+
+    full_hash = run_git_command(root, ["rev-parse", "HEAD"])
+    if full_hash is None:
+        return None, "no hay commits disponibles"
+
+    short_hash = run_git_command(root, ["rev-parse", "--short", "HEAD"])
+    subject = run_git_command(root, ["log", "-1", "--pretty=%s"])
+    body = run_git_command(root, ["log", "-1", "--pretty=%b"])
+    author = run_git_command(root, ["log", "-1", "--pretty=%an <%ae>"])
+    date = run_git_command(root, ["log", "-1", "--date=iso-strict", "--pretty=%ad"])
+    repo_root = run_git_command(root, ["rev-parse", "--show-toplevel"])
+
+    required = [short_hash, subject, author, date, repo_root]
+    if any(value is None for value in required):
+        return None, "no hay commits disponibles"
+
+    env_excludes = [":(exclude).env", ":(exclude).env.*", ":(exclude)**/.env", ":(exclude)**/.env.*"]
+    pathspecs = ["--", ".", *env_excludes]
+    changed = run_git_command(root, ["show", "--name-status", "--format=", "--find-renames", "HEAD", *pathspecs])
+    stat = run_git_command(root, ["show", "--stat", "--format=", "--find-renames", "HEAD", *pathspecs])
+    diff = run_git_command(root, ["show", "--format=", "--patch", "--find-renames", "--find-copies", "--no-ext-diff", "--no-color", "HEAD", *pathspecs])
+
+    if changed is None or stat is None or diff is None:
+        return None, "no hay commits disponibles"
+
+    body = body or "(sin cuerpo de commit)"
+    changed = changed or "(sin archivos reportados)"
+    stat = stat or "(sin estadísticas)"
+    diff = diff or "(sin diff textual)"
+
+    markdown = f"""# AI Git Context
+
+Este archivo fue generado automáticamente por Pack AI para dar contexto rápido del último commit confirmado.
+
+## Resumen
+
+- Modo: `last-commit`
+- Repositorio: `{Path(repo_root).name}`
+- Commit: `{full_hash}`
+- Commit corto: `{short_hash}`
+- Autor: `{author}`
+- Fecha: `{date}`
+- Subject: `{subject}`
+
+## Cuerpo del commit
+
+{body}
+
+## Archivos cambiados
+
+```text
+{changed}
+```
+
+## Estadísticas
+
+```text
+{stat}
+```
+
+## Diff del último commit
+
+```diff
+{diff}
+```
+"""
+    return markdown, None
+
 def copy_zip_with_powershell(zip_path: Path) -> bool:
     """Copia el ZIP al portapapeles de Windows como archivo pegable."""
     zip_path = Path(zip_path).expanduser().resolve()
@@ -314,9 +420,18 @@ def copy_zip(zip_path: Path, mode: str) -> str:
         return "failed"
     return "failed"
 
-def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_patterns: list[str], include_env_example: bool, force: bool = False) -> tuple[int, int, list[FileFinding]]:
+def create_zip(
+    root: Path,
+    output_zip: Path,
+    ignore_patterns: list[str],
+    pass_patterns: list[str],
+    include_env_example: bool,
+    force: bool = False,
+    include_git_context: bool = False,
+) -> tuple[int, int, list[FileFinding]]:
     """Crea el archivo ZIP evitando entrar en directorios ignorados."""
     incl, ign, findings = 0, 0, []
+    included_names = set()
     output_zip_res = output_zip.resolve()
 
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
@@ -357,6 +472,7 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                 # 2. .aipass (bypass scanner)
                 if should_ignore_path(rel, pass_patterns, ignore_secrets=True) == "pattern":
                     zipf.write(path, arcname=rel)
+                    included_names.add(rel)
                     print(f"{indent_file}    ⚠️  Incluido sin escaneo por .aipass: {f}")
                     incl += 1; continue
 
@@ -385,9 +501,39 @@ def create_zip(root: Path, output_zip: Path, ignore_patterns: list[str], pass_pa
                     })
 
                 zipf.write(path, arcname=rel)
+                included_names.add(rel)
                 status_icon = "🚀" if (f_findings or forced_by_name) else "📄"
                 print(f"{indent_file}    {status_icon} {f}")
                 incl += 1
+
+        if include_git_context:
+            git_context_arcname = "AI_GIT_CONTEXT.md"
+            if git_context_arcname in included_names:
+                print(f"⚠️  Ya existe {git_context_arcname}; no se generó contexto Git para evitar duplicados.")
+                ign += 1
+            else:
+                markdown, reason = build_git_context_markdown(root)
+                if markdown is None:
+                    print(f"⚠️  No se pudo generar {git_context_arcname}: {reason}")
+                    ign += 1
+                else:
+                    context_findings = scan_text_for_secrets(markdown)
+                    if context_findings:
+                        findings.append({
+                            "rel": git_context_arcname,
+                            "details": context_findings,
+                            "reason": "git_context_secret_found",
+                            "forced": force
+                        })
+                        if not force:
+                            print(f"⚠️  {git_context_arcname} omitido por posibles secretos.")
+                            ign += 1
+                            return incl, ign, findings
+
+                    zipf.writestr(git_context_arcname, markdown)
+                    included_names.add(git_context_arcname)
+                    print(f"📄 {git_context_arcname}")
+                    incl += 1
     return incl, ign, findings
 
 def get_git_commit_info(root: Path) -> tuple[str | None, str | None]:
@@ -427,15 +573,25 @@ def sanitize_filename(name: str) -> str:
         
     return sanitized
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Empaqueta proyecto en ZIP para IA.")
     parser.add_argument("--version", "-v", action="version", version=f"Pack AI {VERSION}")
     parser.add_argument("--copy", choices=["file", "path", "none"], default="file", help="Modo de copiado.")
     parser.add_argument("--output", help="Ruta del ZIP de salida.")
     parser.add_argument("--force", "-f", action="store_true", help="Forzar inclusión de archivos con alertas (excepto .env).")
+    parser.add_argument(
+        "-g",
+        action="store_true",
+        dest="include_git_context",
+        help="Incluye AI_GIT_CONTEXT.md con el diff del último commit confirmado."
+    )
     parser.add_argument("--no-env-example", action="store_false", dest="include_env_example", 
                         default=CONFIG_INCLUDE_ENV, help="No incluir archivos .env.example.")
     parser.add_argument("folder", nargs="?", default=".", help="Carpeta a procesar.")
+    return parser
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     f_path = args.folder
@@ -483,7 +639,15 @@ def main():
     ignore_patterns = DEFAULT_IGNORE + load_aiignore(root)
     pass_patterns = load_aipass(root)
     
-    incl, ign, total_findings = create_zip(root, out_zip, ignore_patterns, pass_patterns, args.include_env_example, args.force)
+    incl, ign, total_findings = create_zip(
+        root,
+        out_zip,
+        ignore_patterns,
+        pass_patterns,
+        args.include_env_example,
+        args.force,
+        include_git_context=args.include_git_context,
+    )
     
     for f in total_findings:
         is_forced = f.get("forced", False)

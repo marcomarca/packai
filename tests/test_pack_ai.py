@@ -3,7 +3,16 @@ import zipfile
 from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock
-from pack_ai import create_zip, scan_file_for_secrets, should_ignore_path, copy_zip, sanitize_filename, get_git_commit_info
+from pack_ai import (
+    build_git_context_markdown,
+    build_parser,
+    create_zip,
+    get_git_commit_info,
+    scan_file_for_secrets,
+    should_ignore_path,
+    copy_zip,
+    sanitize_filename,
+)
 
 @pytest.fixture
 def temp_project(tmp_path):
@@ -52,7 +61,7 @@ def test_aipass_bypass_scanner(temp_project):
         assert "secret.py" in z.namelist()
 
 def test_env_example_inclusion(temp_project):
-    """Verifica que .env.example se incluya si está limpio."""
+    """Verifica que .env.example se excluya por la regla estricta .env.*."""
     env_ex = temp_project / ".env.example"
     env_ex.write_text("DB_HOST=localhost", encoding="utf-8")
     
@@ -60,9 +69,9 @@ def test_env_example_inclusion(temp_project):
     # Pasamos ignore_patterns vacíos para que solo actúen los SECRET_FILE_PATTERNS internos
     incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
     
-    assert incl == 1
+    assert incl == 0
     with zipfile.ZipFile(zip_path, "r") as z:
-        assert ".env.example" in z.namelist()
+        assert ".env.example" not in z.namelist()
 
 def test_env_example_exclusion_with_secret(temp_project):
     """Verifica que .env.example se excluya si tiene secretos."""
@@ -74,7 +83,7 @@ def test_env_example_exclusion_with_secret(temp_project):
     incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
     
     assert incl == 0
-    assert len(findings) >= 1
+    assert findings == []
 
 def test_nested_directory_ignore(temp_project):
     """Verifica que patrones de carpeta como 'backups/' ignoren subcarpetas."""
@@ -99,7 +108,7 @@ def test_hidden_dot_directories_are_strictly_ignored(temp_project):
 def test_dot_files_are_not_ignored_by_hidden_directory_rule(temp_project):
     """Verifica que la regla de carpetas ocultas no afecte archivos con punto."""
     assert should_ignore_path(".python-version", []) is None
-    assert should_ignore_path(".env.example", []) is None
+    assert should_ignore_path(".env.example", []) == "strict"
 
 def test_allowed_dot_directories_are_not_globally_ignored(temp_project):
     """Verifica excepciones de carpetas ocultas que si aportan contexto."""
@@ -226,3 +235,198 @@ def test_sensitive_filename_forced(temp_project):
     incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True)
     assert incl == 1
     assert any(f["reason"] == "sensitive_forced" for f in findings)
+
+def test_git_context_not_included_by_default(temp_project):
+    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+
+    with patch("pack_ai.build_git_context_markdown") as mock_build:
+        create_zip(temp_project, zip_path, [], [], True, include_git_context=False)
+
+    mock_build.assert_not_called()
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert "AI_GIT_CONTEXT.md" not in z.namelist()
+
+def test_git_context_included_with_g(temp_project):
+    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+    markdown = "```diff\n+print('hello')\n```"
+
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
+        create_zip(temp_project, zip_path, [], [], True, include_git_context=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert "AI_GIT_CONTEXT.md" in z.namelist()
+        assert "+print('hello')" in z.read("AI_GIT_CONTEXT.md").decode("utf-8")
+
+def test_git_context_secret_excluded_without_force(temp_project):
+    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
+        incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=False, include_git_context=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert "AI_GIT_CONTEXT.md" not in z.namelist()
+    assert any(f["reason"] == "git_context_secret_found" and f["forced"] is False for f in findings)
+
+def test_git_context_secret_included_with_force(temp_project):
+    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
+        incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True, include_git_context=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert "AI_GIT_CONTEXT.md" in z.namelist()
+    assert any(f["reason"] == "git_context_secret_found" and f["forced"] is True for f in findings)
+
+def test_git_context_collision_is_not_overwritten(temp_project):
+    (temp_project / "AI_GIT_CONTEXT.md").write_text("REAL FILE", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+
+    with patch("pack_ai.build_git_context_markdown", return_value=("GENERATED FILE", None)):
+        create_zip(temp_project, zip_path, [], [], True, include_git_context=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        assert names.count("AI_GIT_CONTEXT.md") == 1
+        content = z.read("AI_GIT_CONTEXT.md").decode("utf-8")
+        assert content == "REAL FILE"
+        assert "GENERATED FILE" not in content
+
+def test_build_git_context_markdown_not_repo():
+    with patch("pack_ai.run_git_command", return_value="false"):
+        markdown, reason = build_git_context_markdown(Path("."))
+
+    assert markdown is None
+    assert "no es un repositorio Git" in reason
+
+def test_build_git_context_markdown_contains_expected_sections():
+    values = {
+        ("rev-parse", "--is-inside-work-tree"): "true",
+        ("rev-parse", "HEAD"): "abcdef1234567890",
+        ("rev-parse", "--short", "HEAD"): "abcdef1",
+        ("log", "-1", "--pretty=%s"): "feat: demo",
+        ("log", "-1", "--pretty=%b"): "body",
+        ("log", "-1", "--pretty=%an <%ae>"): "Ada <ada@example.com>",
+        ("log", "-1", "--date=iso-strict", "--pretty=%ad"): "2026-06-01T12:00:00+00:00",
+        ("rev-parse", "--show-toplevel"): "/tmp/repo",
+    }
+
+    def fake_git(root, args):
+        key = tuple(args)
+        if key in values:
+            return values[key]
+        if "--name-status" in args:
+            return "M\tcode.py"
+        if "--stat" in args:
+            return " code.py | 2 +-"
+        if "--patch" in args:
+            return "diff --git a/code.py b/code.py\n@@ -1 +1 @@\n-old\n+new"
+        return None
+
+    with patch("pack_ai.run_git_command", side_effect=fake_git):
+        markdown, reason = build_git_context_markdown(Path("."))
+
+    assert reason is None
+    for section in [
+        "# AI Git Context",
+        "## Resumen",
+        "## Cuerpo del commit",
+        "## Archivos cambiados",
+        "## Estadísticas",
+        "## Diff del último commit",
+        "diff --git",
+        "@@",
+        "+new",
+        "-old",
+    ]:
+        assert section in markdown
+
+def test_env_excluded_without_force(temp_project):
+    (temp_project / ".env").write_text("TOKEN=abc", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+
+    create_zip(temp_project, zip_path, [], [], True, force=False)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert ".env" not in z.namelist()
+
+def test_env_excluded_even_with_force(temp_project):
+    (temp_project / ".env").write_text("TOKEN=abc", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+
+    create_zip(temp_project, zip_path, [], [], True, force=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert ".env" not in z.namelist()
+
+def test_env_variants_excluded_even_with_force(temp_project):
+    (temp_project / ".env.local").write_text("TOKEN=abc", encoding="utf-8")
+    (temp_project / ".env.production").write_text("TOKEN=abc", encoding="utf-8")
+    nested = temp_project / "nested"
+    nested.mkdir()
+    (nested / ".env").write_text("TOKEN=abc", encoding="utf-8")
+    (nested / ".env.local").write_text("TOKEN=abc", encoding="utf-8")
+    zip_path = temp_project.parent / "test.zip"
+
+    create_zip(temp_project, zip_path, [], [], True, force=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        assert ".env.local" not in names
+        assert ".env.production" not in names
+        assert "nested/.env" not in names
+        assert "nested/.env.local" not in names
+
+def test_git_context_uses_env_exclude_pathspecs():
+    calls = []
+
+    def fake_git(root, args):
+        calls.append(args)
+        if args == ["rev-parse", "--is-inside-work-tree"]:
+            return "true"
+        if args[:1] == ["rev-parse"] or args[:1] == ["log"]:
+            return "value"
+        return ""
+
+    with patch("pack_ai.run_git_command", side_effect=fake_git):
+        build_git_context_markdown(Path("."))
+
+    env_pathspecs = {":(exclude).env", ":(exclude).env.*", ":(exclude)**/.env", ":(exclude)**/.env.*"}
+    git_show_calls = [args for args in calls if args[:1] == ["show"]]
+    assert len(git_show_calls) == 3
+    for args in git_show_calls:
+        assert env_pathspecs.issubset(set(args))
+
+def test_git_context_does_not_include_env_diff():
+    def fake_git(root, args):
+        if args == ["rev-parse", "--is-inside-work-tree"]:
+            return "true"
+        if args[:1] == ["rev-parse"] or args[:1] == ["log"]:
+            return "value"
+        if "--name-status" in args:
+            return "M\tcode.py"
+        if "--stat" in args:
+            return " code.py | 1 +"
+        if "--patch" in args:
+            return "diff --git a/code.py b/code.py\n@@ -1 +1 @@\n-old\n+new"
+        return ""
+
+    with patch("pack_ai.run_git_command", side_effect=fake_git):
+        markdown, reason = build_git_context_markdown(Path("."))
+
+    assert reason is None
+    assert ".env" not in markdown
+    assert "API_KEY=" not in markdown
+    assert "SECRET=" not in markdown
+    assert "TOKEN=" not in markdown
+
+def test_argparse_combined_gf():
+    args = build_parser().parse_args([".", "-gf"])
+
+    assert args.include_git_context is True
+    assert args.force is True
