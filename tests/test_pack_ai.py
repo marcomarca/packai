@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock
 from pack_ai import (
+    build_default_zip_stem,
     build_git_context_markdown,
     build_parser,
     create_zip,
@@ -43,6 +44,19 @@ def test_aipass_exclusion_from_zip(temp_project):
         assert "code.py" in names
         assert ".aipass" not in names
 
+def test_aipass_excluded_even_with_force(temp_project):
+    """Verifica que .aipass no se incluya ni con --force."""
+    (temp_project / ".aipass").write_text("secret.py", encoding="utf-8")
+    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
+
+    zip_path = temp_project.parent / "test.zip"
+    create_zip(temp_project, zip_path, [], [], True, force=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        assert "code.py" in names
+        assert ".aipass" not in names
+
 def test_aipass_bypass_scanner(temp_project):
     """Verifica que archivos en .aipass se incluyan sin ser escaneados."""
     # Archivo con secreto que normalmente sería bloqueado
@@ -61,7 +75,7 @@ def test_aipass_bypass_scanner(temp_project):
         assert "secret.py" in z.namelist()
 
 def test_env_example_inclusion(temp_project):
-    """Verifica que .env.example se excluya por la regla estricta .env.*."""
+    """Verifica que .env.example se incluya si está limpio."""
     env_ex = temp_project / ".env.example"
     env_ex.write_text("DB_HOST=localhost", encoding="utf-8")
     
@@ -69,9 +83,9 @@ def test_env_example_inclusion(temp_project):
     # Pasamos ignore_patterns vacíos para que solo actúen los SECRET_FILE_PATTERNS internos
     incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
     
-    assert incl == 0
+    assert incl == 1
     with zipfile.ZipFile(zip_path, "r") as z:
-        assert ".env.example" not in z.namelist()
+        assert ".env.example" in z.namelist()
 
 def test_env_example_exclusion_with_secret(temp_project):
     """Verifica que .env.example se excluya si tiene secretos."""
@@ -83,7 +97,18 @@ def test_env_example_exclusion_with_secret(temp_project):
     incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
     
     assert incl == 0
-    assert findings == []
+    assert len(findings) >= 1
+
+def test_env_example_excluded_with_no_env_example(temp_project):
+    env_ex = temp_project / ".env.example"
+    env_ex.write_text("DB_HOST=localhost", encoding="utf-8")
+
+    zip_path = temp_project.parent / "test.zip"
+    incl, ign, findings = create_zip(temp_project, zip_path, [], [], False)
+
+    assert incl == 0
+    with zipfile.ZipFile(zip_path, "r") as z:
+        assert ".env.example" not in z.namelist()
 
 def test_nested_directory_ignore(temp_project):
     """Verifica que patrones de carpeta como 'backups/' ignoren subcarpetas."""
@@ -108,7 +133,7 @@ def test_hidden_dot_directories_are_strictly_ignored(temp_project):
 def test_dot_files_are_not_ignored_by_hidden_directory_rule(temp_project):
     """Verifica que la regla de carpetas ocultas no afecte archivos con punto."""
     assert should_ignore_path(".python-version", []) is None
-    assert should_ignore_path(".env.example", []) == "strict"
+    assert should_ignore_path(".env.example", []) is None
 
 def test_allowed_dot_directories_are_not_globally_ignored(temp_project):
     """Verifica excepciones de carpetas ocultas que si aportan contexto."""
@@ -188,6 +213,15 @@ def test_get_git_commit_info_fail():
         subject, short_hash = get_git_commit_info(Path("."))
         assert subject is None
         assert short_hash is None
+
+def test_default_zip_stem_uses_project_and_hash_without_subject(temp_project):
+    long_subject = "feat: " + "very-long-subject-" * 20
+
+    with patch("pack_ai.get_git_commit_info", return_value=(long_subject, "b8c7cd4")):
+        stem = build_default_zip_stem(temp_project)
+
+    assert stem == "test_project-b8c7cd4"
+    assert "very-long-subject" not in stem
 
 def test_force_inclusion_with_secret(temp_project):
     """Verifica que --force incluya archivos con secretos."""

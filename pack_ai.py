@@ -60,6 +60,8 @@ DEFAULT_IGNORE = [
 
 # Archivos sensibles que se excluyen siempre por nombre
 STRICT_EXCLUDE_PATTERNS = [
+    ".aipass",
+    "**/.aipass",
     ".env",
     ".env.*",
     "**/.env",
@@ -187,11 +189,11 @@ def should_ignore_path(relative_path: str, patterns: list[str], include_env_exam
     if any(is_ignored_dir_name(part) for part in dir_parts):
         return "strict"
 
-    if matches_any_path_pattern(normalized, STRICT_EXCLUDE_PATTERNS):
-        return "strict"
-
     # 2. .env y secretos
     is_safe_env = include_env_example and name in SAFE_ENV_EXAMPLES
+
+    if not is_safe_env and matches_any_path_pattern(normalized, STRICT_EXCLUDE_PATTERNS):
+        return "strict"
     
     if not is_safe_env:
         # El usuario pide que .env NUNCA pase
@@ -573,6 +575,18 @@ def sanitize_filename(name: str) -> str:
         
     return sanitized
 
+def build_default_zip_stem(root: Path) -> str:
+    project_name = root.name if root.name else "project"
+    safe_project_name = sanitize_filename(project_name) or "project"
+
+    if len(safe_project_name) > 80:
+        safe_project_name = safe_project_name[:77] + "..."
+
+    _, git_hash = get_git_commit_info(root)
+    if git_hash:
+        return f"{safe_project_name}-{git_hash}"
+    return safe_project_name
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Empaqueta proyecto en ZIP para IA.")
     parser.add_argument("--version", "-v", action="version", version=f"Pack AI {VERSION}")
@@ -601,38 +615,7 @@ def main():
     if not root.is_dir():
         raise SystemExit(f"❌ La ruta no es una carpeta: {root}")
 
-    project_name = root.name if root.name else "project"
-    safe_project_name = sanitize_filename(project_name) or "project"
-    
-    # Limitar nombre de proyecto para asegurar espacio al commit
-    if len(safe_project_name) > 80:
-        safe_project_name = safe_project_name[:77] + "..."
-    
-    name = safe_project_name
-    
-    # Intentar obtener el nombre del último commit y su hash
-    git_subject, git_hash = get_git_commit_info(root)
-    if git_subject:
-        s_subject = sanitize_filename(git_subject)
-        suffix = f"-{git_hash}" if git_hash else ""
-        
-        # El total debe ser de máximo 200 caracteres (incluyendo .zip)
-        # Formato: [Project]-[Subject]-[Hash].zip
-        # .zip = 4 chars, guion = 1 char
-        max_total = 200
-        reserved = len(suffix) + 5
-        available_for_subject = max_total - len(safe_project_name) - reserved
-        
-        if available_for_subject > 3:
-            if len(s_subject) > available_for_subject:
-                s_subject = s_subject[:available_for_subject-3] + "..."
-            name = f"{safe_project_name}-{s_subject}{suffix}"
-        elif available_for_subject > 0:
-            # Si hay poco espacio, metemos lo que quepa sin elipsis o simplemente el guion
-            name = f"{safe_project_name}-{s_subject[:available_for_subject]}{suffix}"
-        else:
-            # Sin espacio para el sujeto
-            name = f"{safe_project_name}{suffix}"
+    name = build_default_zip_stem(root)
 
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 

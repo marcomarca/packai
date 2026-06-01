@@ -9,7 +9,7 @@
 - **🌳 Visualización Estructurada**: Muestra un árbol real del contenido que se está empaquetando.
 - **📋 Copiado Automático**: Copia el archivo ZIP resultante directamente al portapapeles (en Windows).
 - **⚙️ Configuración Flexible**: Soporte para archivos `.aiignore` (exclusión total) y `.aipass` (inclusión sin escaneo).
-- **📄 Manejo Inteligente de Entornos**: Permite incluir archivos `.env.example` de forma segura (siempre que no contengan secretos reales).
+- **📄 Manejo Inteligente de Entornos**: Permite incluir archivos `.env.example`, `.env.sample` y `.env.template` de forma segura (siempre que no contengan secretos reales).
 - **🏷️ Versionado Automático**: El nombre del ZIP incluye el último commit de Git y su hash para facilitar el seguimiento de versiones.
 
 ## 📋 Requisitos
@@ -78,12 +78,12 @@ Combina `-g` con `-f`. Incluye el contexto Git y activa el modo force para inclu
 
 El contexto Git no incluye cambios sin commit.
 
-Los archivos `.env`, `.env.*`, `**/.env` y `**/.env.*` nunca se incluyen, ni en el ZIP normal ni dentro de `AI_GIT_CONTEXT.md`, incluso usando `-f`.
+Los archivos `.env`, `.env.local`, `.env.production` y variantes reales nunca se incluyen, ni en el ZIP normal ni dentro de `AI_GIT_CONTEXT.md`, incluso usando `-f`. Los ejemplos `.env.example`, `.env.sample` y `.env.template` pueden incluirse si no contienen secretos; `--no-env-example` los excluye.
 
 ## ⚙️ Configuración Personalizada
 
 - **`.aiignore`**: Permite definir patrones de exclusión simples (tipo `fnmatch`). Lo que coincida no entrará en el ZIP.
-- **`.aipass`**: Permite incluir archivos que normalmente serían escaneados para saltarse el detector de secretos (útil para falsos positivos). **Nota importante**: No anula las exclusiones globales de seguridad (como `.git`, `node_modules`, carpetas ocultas tipo `.tmp/` o `.uv-python/`, `.env`, etc.); esos archivos siempre se ignorarán. Se mostrará una advertencia `⚠️` por seguridad.
+- **`.aipass`**: Permite que archivos listados se incluyan sin pasar por el detector de secretos (útil para falsos positivos). El propio archivo `.aipass` nunca entra al ZIP, incluso con `-f`. **Nota importante**: No anula las exclusiones globales de seguridad (como `.git`, `node_modules`, carpetas ocultas tipo `.tmp/` o `.uv-python/`, `.env`, etc.); esos archivos siempre se ignorarán. Se mostrará una advertencia `⚠️` por seguridad.
 - **`config_pack_ai.py`**: Archivo central para cambiar comportamientos por defecto del script.
 
 ## 🛡️ Seguridad y Limitaciones
