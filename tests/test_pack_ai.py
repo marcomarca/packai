@@ -12,6 +12,7 @@ from pack_ai import (
     GIT_CONTEXT_FILENAME,
     scan_file_for_secrets,
     should_ignore_path,
+    copy_git_context_to_clipboard,
     copy_zip,
     sanitize_filename,
 )
@@ -465,3 +466,51 @@ def test_argparse_combined_gf():
 
     assert args.include_git_context is True
     assert args.force is True
+
+
+def test_argparse_commit_clipboard():
+    args = build_parser().parse_args([".", "-c"])
+
+    assert args.copy_git_context is True
+
+def test_argparse_combined_cf():
+    args = build_parser().parse_args([".", "-cf"])
+
+    assert args.copy_git_context is True
+    assert args.force is True
+
+def test_copy_git_context_to_clipboard_success():
+    markdown = "# AI Git Context\n\n```diff\n+ok\n```"
+
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)), \
+         patch("pack_ai.copy_text_to_clipboard", return_value=True) as mock_copy:
+        status, findings = copy_git_context_to_clipboard(Path("."), force=False)
+
+    assert status == "copied"
+    assert findings == []
+    mock_copy.assert_called_once_with(markdown)
+
+def test_copy_git_context_to_clipboard_blocks_secret_without_force():
+    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)), \
+         patch("pack_ai.copy_text_to_clipboard") as mock_copy:
+        status, findings = copy_git_context_to_clipboard(Path("."), force=False)
+
+    assert status == "blocked_secret"
+    assert len(findings) == 1
+    assert findings[0]["reason"] == "git_context_secret_found"
+    assert findings[0]["forced"] is False
+    mock_copy.assert_not_called()
+
+def test_copy_git_context_to_clipboard_allows_secret_with_force():
+    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)), \
+         patch("pack_ai.copy_text_to_clipboard", return_value=True) as mock_copy:
+        status, findings = copy_git_context_to_clipboard(Path("."), force=True)
+
+    assert status == "copied"
+    assert len(findings) == 1
+    assert findings[0]["forced"] is True
+    mock_copy.assert_called_once_with(markdown)

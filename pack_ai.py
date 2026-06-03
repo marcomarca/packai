@@ -394,20 +394,63 @@ def copy_zip_with_powershell(zip_path: Path) -> bool:
 
     # Usamos un bloque de script para que PowerShell asigne los argumentos a $args
     script = "& { Set-Clipboard -LiteralPath $args[0] }"
-    res = subprocess.run(
-        ["powershell", "-NoProfile", "-Command", script, str(zip_path)],
-        capture_output=True, text=True
-    )
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script, str(zip_path)],
+            capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        return False
     return res.returncode == 0
 
 def copy_path_as_text(path: Path) -> bool:
     """Copia la ruta absoluta al portapapeles como texto."""
     script = "& { Set-Clipboard -Value $args[0] }"
-    res = subprocess.run(
-        ["powershell", "-NoProfile", "-Command", script, str(path.resolve())],
-        capture_output=True, text=True
-    )
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script, str(path.resolve())],
+            capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        return False
     return res.returncode == 0
+
+def copy_text_to_clipboard(text: str) -> bool:
+    """Copia texto al portapapeles usando PowerShell por stdin."""
+    script = "& { $inputText = [Console]::In.ReadToEnd(); Set-Clipboard -Value $inputText }"
+    for executable in ("powershell", "pwsh"):
+        try:
+            res = subprocess.run(
+                [executable, "-NoProfile", "-Command", script],
+                input=text,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            continue
+        if res.returncode == 0:
+            return True
+    return False
+
+def copy_git_context_to_clipboard(root: Path, force: bool = False) -> tuple[str, list[FileFinding]]:
+    """Genera el contexto Git del último commit y lo copia al portapapeles."""
+    markdown, reason = build_git_context_markdown(root)
+    if markdown is None:
+        return f"failed:{reason}", []
+
+    findings: list[FileFinding] = []
+    context_findings = scan_text_for_secrets(markdown)
+    if context_findings:
+        findings.append({
+            "rel": GIT_CONTEXT_FILENAME,
+            "details": context_findings,
+            "reason": "git_context_secret_found",
+            "forced": force,
+        })
+        if not force:
+            return "blocked_secret", findings
+
+    return ("copied" if copy_text_to_clipboard(markdown) else "copy_failed"), findings
 
 def copy_zip(zip_path: Path, mode: str) -> str:
     """Gestiona el copiado del resultado según el modo elegido."""
@@ -595,6 +638,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", help="Ruta del ZIP de salida.")
     parser.add_argument("--force", "-f", action="store_true", help="Forzar inclusión de archivos con alertas (excepto .env).")
     parser.add_argument(
+        "--commit-clipboard",
+        "-c",
+        action="store_true",
+        dest="copy_git_context",
+        help=f"Copia al portapapeles el Markdown de {GIT_CONTEXT_FILENAME} sin crear ZIP."
+    )
+    parser.add_argument(
         "-g",
         action="store_true",
         dest="include_git_context",
@@ -604,6 +654,22 @@ def build_parser() -> argparse.ArgumentParser:
                         default=CONFIG_INCLUDE_ENV, help="No incluir archivos .env.example.")
     parser.add_argument("folder", nargs="?", default=".", help="Carpeta a procesar.")
     return parser
+
+def print_findings(total_findings: list[FileFinding]) -> None:
+    for f in total_findings:
+        is_forced = f.get("forced", False)
+        status = "INCLUIDO (FORZADO)" if is_forced else "EXCLUIDO"
+        icon = "🚀" if is_forced else "⚠️"
+        
+        print(f"{icon}  {status}: {f['rel']}")
+        for d in f['details']:
+            print(f"    Tipo: {d['type']}")
+            if d.get('line'):
+                print(f"    Línea: {d['line']}")
+            print(f"    Secreto: {d['secret']}")
+        
+        action = "incluido o copiado a pesar de la alerta" if is_forced else "omitido"
+        print(f"    Acción: {action}\n")
 
 def main():
     parser = build_parser()
@@ -615,6 +681,23 @@ def main():
         raise SystemExit(f"❌ La ruta no existe: {root}")
     if not root.is_dir():
         raise SystemExit(f"❌ La ruta no es una carpeta: {root}")
+
+    if args.copy_git_context:
+        status, findings = copy_git_context_to_clipboard(root, force=args.force)
+        print_findings(findings)
+        status_msgs = {
+            "copied": f"✅ {GIT_CONTEXT_FILENAME} copiado al portapapeles.",
+            "blocked_secret": f"⚠️ {GIT_CONTEXT_FILENAME} no se copió por posibles secretos. Usa -cf para forzar.",
+            "copy_failed": f"❌ Error al copiar {GIT_CONTEXT_FILENAME} al portapapeles.",
+        }
+        if status.startswith("failed:"):
+            reason = status.split(":", 1)[1]
+            print(f"❌ No se pudo generar {GIT_CONTEXT_FILENAME}: {reason}")
+            raise SystemExit(1)
+        print(status_msgs.get(status, status_msgs["copy_failed"]))
+        if status != "copied":
+            raise SystemExit(1)
+        return
 
     name = build_default_zip_stem(root)
 
@@ -633,19 +716,7 @@ def main():
         include_git_context=args.include_git_context,
     )
     
-    for f in total_findings:
-        is_forced = f.get("forced", False)
-        status = "INCLUIDO (FORZADO)" if is_forced else "EXCLUIDO"
-        icon = "🚀" if is_forced else "⚠️"
-        
-        print(f"{icon}  {status}: {f['rel']}")
-        for d in f['details']:
-            print(f"    Tipo: {d['type']}")
-            if d.get('line'): print(f"    Línea: {d['line']}")
-            print(f"    Secreto: {d['secret']}")
-        
-        action = "añadido al ZIP a pesar de la alerta" if is_forced else "omitido del ZIP"
-        print(f"    Acción: {action}\n")
+    print_findings(total_findings)
 
     copy_res = copy_zip(out_zip, args.copy)
     

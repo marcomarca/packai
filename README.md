@@ -49,6 +49,9 @@ packai C:\Ruta\De\Mi\Proyecto
 # El orden de las opciones es flexible
 packai --copy path --output mi_respaldo.zip .
 packai . --copy path --output mi_respaldo.zip
+
+# Copiar únicamente el contexto/diff del último commit al portapapeles
+packai . -c
 ```
 
 ### Opciones disponibles
@@ -59,10 +62,25 @@ packai . --copy path --output mi_respaldo.zip
 | `--copy` | `file`, `path`, `none` | Qué se copia al portapapeles (por defecto: `file`). |
 | `--output` | `[ruta]` | Ruta del ZIP generado. Por defecto se nombra como `[Proyecto]-[Commit]-[Hash].zip`. |
 | `--force`, `-f` | (flag) | Forzar la inclusión de archivos con alertas de seguridad (falsos positivos), **excepto archivos .env y variantes** que siempre se excluyen. |
+| `--commit-clipboard`, `-c` | (flag) | Copia al portapapeles el Markdown de `git--diff_last_commit.md` para el último commit confirmado, sin crear ZIP. |
 | `-g` | (flag) | Incluye `git--diff_last_commit.md` con el diff del último commit confirmado. |
 | `--no-env-example` | (flag) | Si se activa, excluye archivos `.env.example` y similares. |
 
-### Incluir contexto del último commit
+### Copiar solo el contexto del último commit
+
+```bash
+packai . -c
+```
+
+Genera el mismo contenido Markdown de `git--diff_last_commit.md`, pero no crea ZIP: solo copia ese Markdown al portapapeles.
+
+```bash
+packai . -cf
+```
+
+Combina `-c` con `-f`. Si el detector marca posibles secretos en el contexto Git, fuerza el copiado al portapapeles. Los archivos `.env` y variantes reales siguen excluidos del diff generado.
+
+### Incluir contexto del último commit en el ZIP
 
 ```bash
 packai . -g
