@@ -327,11 +327,10 @@ def build_git_context_markdown(root: Path) -> tuple[str | None, str | None]:
     short_hash = run_git_command(root, ["rev-parse", "--short", "HEAD"])
     subject = run_git_command(root, ["log", "-1", "--pretty=%s"])
     body = run_git_command(root, ["log", "-1", "--pretty=%b"])
-    author = run_git_command(root, ["log", "-1", "--pretty=%an <%ae>"])
     date = run_git_command(root, ["log", "-1", "--date=iso-strict", "--pretty=%ad"])
     repo_root = run_git_command(root, ["rev-parse", "--show-toplevel"])
 
-    required = [short_hash, subject, author, date, repo_root]
+    required = [short_hash, subject, date, repo_root]
     if any(value is None for value in required):
         return None, "no hay commits disponibles"
 
@@ -349,17 +348,12 @@ def build_git_context_markdown(root: Path) -> tuple[str | None, str | None]:
     stat = stat or "(sin estadísticas)"
     diff = diff or "(sin diff textual)"
 
-    markdown = f"""# AI Git Context
-
-Este archivo fue generado automáticamente por Pack AI para dar contexto rápido del último commit confirmado.
-
-## Resumen
+    markdown = f"""## Resumen
 
 - Modo: `last-commit`
 - Repositorio: `{Path(repo_root).name}`
 - Commit: `{full_hash}`
 - Commit corto: `{short_hash}`
-- Autor: `{author}`
 - Fecha: `{date}`
 - Subject: `{subject}`
 

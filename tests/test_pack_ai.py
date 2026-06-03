@@ -347,7 +347,6 @@ def test_build_git_context_markdown_contains_expected_sections():
         ("rev-parse", "--short", "HEAD"): "abcdef1",
         ("log", "-1", "--pretty=%s"): "feat: demo",
         ("log", "-1", "--pretty=%b"): "body",
-        ("log", "-1", "--pretty=%an <%ae>"): "Ada <ada@example.com>",
         ("log", "-1", "--date=iso-strict", "--pretty=%ad"): "2026-06-01T12:00:00+00:00",
         ("rev-parse", "--show-toplevel"): "/tmp/repo",
     }
@@ -368,8 +367,12 @@ def test_build_git_context_markdown_contains_expected_sections():
         markdown, reason = build_git_context_markdown(Path("."))
 
     assert reason is None
+    assert markdown.startswith("## Resumen")
+    assert "# AI Git Context" not in markdown
+    assert "Este archivo fue generado automáticamente" not in markdown
+    assert "Autor:" not in markdown
+    assert "Ada <ada@example.com>" not in markdown
     for section in [
-        "# AI Git Context",
         "## Resumen",
         "## Cuerpo del commit",
         "## Archivos cambiados",
@@ -460,6 +463,28 @@ def test_git_context_does_not_include_env_diff():
     assert "API_KEY=" not in markdown
     assert "SECRET=" not in markdown
     assert "TOKEN=" not in markdown
+
+def test_git_context_summary_is_minimal_for_force_and_clipboard_paths(temp_project):
+    markdown = "## Resumen\n\n- Modo: `last-commit`\n\n## Diff del último commit\n\n```diff\n+ok\n```\n"
+
+    zip_path = temp_project.parent / "test.zip"
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
+        create_zip(temp_project, zip_path, [], [], True, force=True, include_git_context=True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        zipped_markdown = z.read(GIT_CONTEXT_FILENAME).decode("utf-8")
+
+    assert zipped_markdown == markdown
+    assert "# AI Git Context" not in zipped_markdown
+    assert "Autor:" not in zipped_markdown
+
+    with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)), \
+         patch("pack_ai.copy_text_to_clipboard", return_value=True) as mock_copy:
+        status, findings = copy_git_context_to_clipboard(temp_project, force=True)
+
+    assert status == "copied"
+    assert findings == []
+    mock_copy.assert_called_once_with(markdown)
 
 def test_argparse_combined_gf():
     args = build_parser().parse_args([".", "-gf"])
