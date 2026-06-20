@@ -5,7 +5,7 @@ import re
 import subprocess
 import zipfile
 import unicodedata
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import TypedDict, Union
 
 # Intentar cargar configuración externa
@@ -173,6 +173,64 @@ def matches_any_path_pattern(relative_path: str, patterns: list[str]) -> bool:
     name = Path(normalized).name
     return any(fnmatch.fnmatch(normalized, p) or fnmatch.fnmatch(name, p) for p in patterns)
 
+def normalize_cli_exclude_paths(root: Path, exclude_paths: list[str]) -> list[str]:
+    """
+    Valida y normaliza carpetas excluidas desde CLI.
+
+    Las rutas deben ser relativas a ``root``. No se aceptan rutas absolutas,
+    rutas con unidad de Windows, ``~`` ni segmentos ``..``. Cada ruta debe
+    resolver a una carpeta existente dentro del proyecto.
+    """
+    normalized_dirs: list[str] = []
+    seen: set[str] = set()
+    root_resolved = root.resolve()
+
+    for raw_path in exclude_paths or []:
+        raw = str(raw_path).strip()
+        if not raw:
+            raise SystemExit("❌ La ruta de exclusión no puede estar vacía.")
+
+        windows_path = PureWindowsPath(raw)
+        if Path(raw).is_absolute() or windows_path.is_absolute() or windows_path.drive:
+            raise SystemExit(f"❌ La exclusión debe ser relativa al proyecto, no absoluta: {raw}")
+
+        normalized = raw.replace("\\", "/").strip()
+        if normalized == "~" or normalized.startswith("~/"):
+            raise SystemExit(f"❌ La exclusión debe ser relativa al proyecto, no al home del usuario: {raw}")
+
+        parts = [part for part in normalized.split("/") if part and part != "."]
+        if not parts:
+            raise SystemExit("❌ No puedes excluir la raíz completa del proyecto con '.'.")
+        if any(part == ".." for part in parts):
+            raise SystemExit(f"❌ La exclusión no puede salir del proyecto usando '..': {raw}")
+
+        rel = "/".join(parts)
+        candidate = (root_resolved / rel).resolve()
+        try:
+            candidate.relative_to(root_resolved)
+        except ValueError:
+            raise SystemExit(f"❌ La exclusión apunta fuera del proyecto: {raw}")
+
+        if not candidate.exists():
+            raise SystemExit(f"❌ La carpeta a excluir no existe dentro del proyecto: {rel}")
+        if not candidate.is_dir():
+            raise SystemExit(f"❌ La exclusión debe apuntar a una carpeta, no a un archivo: {rel}")
+
+        rel = candidate.relative_to(root_resolved).as_posix()
+        if rel not in seen:
+            normalized_dirs.append(rel)
+            seen.add(rel)
+
+    return normalized_dirs
+
+def build_runtime_exclude_patterns(exclude_dirs: list[str]) -> list[str]:
+    """Convierte carpetas relativas en patrones exactos para el ZIP."""
+    return [f"{directory.rstrip('/')}/**" for directory in exclude_dirs]
+
+def build_git_exclude_pathspecs(exclude_dirs: list[str]) -> list[str]:
+    """Convierte carpetas relativas en pathspecs de exclusión para git show."""
+    return [f":(exclude){directory.rstrip('/')}/**" for directory in exclude_dirs]
+
 def should_ignore_path(relative_path: str, patterns: list[str], include_env_example: bool = True, ignore_secrets: bool = False) -> Union[str, None]:
     """
     Verifica si una ruta debe ser ignorada. 
@@ -315,7 +373,7 @@ def run_git_command(root: Path, args: list[str]) -> str | None:
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
 
-def build_git_context_markdown(root: Path) -> tuple[str | None, str | None]:
+def build_git_context_markdown(root: Path, exclude_dirs: list[str] | None = None) -> tuple[str | None, str | None]:
     inside = run_git_command(root, ["rev-parse", "--is-inside-work-tree"])
     if inside != "true":
         return None, "no es un repositorio Git"
@@ -335,7 +393,8 @@ def build_git_context_markdown(root: Path) -> tuple[str | None, str | None]:
         return None, "no hay commits disponibles"
 
     env_excludes = [":(exclude).env", ":(exclude).env.*", ":(exclude)**/.env", ":(exclude)**/.env.*"]
-    pathspecs = ["--", ".", *env_excludes]
+    runtime_excludes = build_git_exclude_pathspecs(exclude_dirs or [])
+    pathspecs = ["--", ".", *env_excludes, *runtime_excludes]
     changed = run_git_command(root, ["show", "--name-status", "--format=", "--find-renames", "HEAD", *pathspecs])
     stat = run_git_command(root, ["show", "--stat", "--format=", "--find-renames", "HEAD", *pathspecs])
     diff = run_git_command(root, ["show", "--format=", "--patch", "--find-renames", "--find-copies", "--no-ext-diff", "--no-color", "HEAD", *pathspecs])
@@ -426,9 +485,9 @@ def copy_text_to_clipboard(text: str) -> bool:
             return True
     return False
 
-def copy_git_context_to_clipboard(root: Path, force: bool = False) -> tuple[str, list[FileFinding]]:
+def copy_git_context_to_clipboard(root: Path, force: bool = False, exclude_dirs: list[str] | None = None) -> tuple[str, list[FileFinding]]:
     """Genera el contexto Git del último commit y lo copia al portapapeles."""
-    markdown, reason = build_git_context_markdown(root)
+    markdown, reason = build_git_context_markdown(root, exclude_dirs=exclude_dirs)
     if markdown is None:
         return f"failed:{reason}", []
 
@@ -468,6 +527,7 @@ def create_zip(
     include_env_example: bool,
     force: bool = False,
     include_git_context: bool = False,
+    exclude_dirs: list[str] | None = None,
 ) -> tuple[int, int, list[FileFinding]]:
     """Crea el archivo ZIP evitando entrar en directorios ignorados."""
     incl, ign, findings = 0, 0, []
@@ -477,7 +537,16 @@ def create_zip(
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
         print(f"Empaquetando: {root.name}...")
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = sorted([d for d in dirnames if not is_ignored_dir_name(d)])
+            kept_dirnames = []
+            for d in sorted(dirnames):
+                dir_path = Path(dirpath) / d
+                rel_child_dir = f"{dir_path.relative_to(root).as_posix()}/"
+                ignore_type = should_ignore_path(rel_child_dir, ignore_patterns, include_env_example)
+                if ignore_type in ("strict", "pattern") or dir_path.is_symlink():
+                    ign += 1
+                    continue
+                kept_dirnames.append(d)
+            dirnames[:] = kept_dirnames
             filenames = sorted(filenames)
             
             rel_dir = Path(dirpath).relative_to(root)
@@ -552,7 +621,7 @@ def create_zip(
                 print(f"⚠️  Ya existe {git_context_arcname}; no se generó contexto Git para evitar duplicados.")
                 ign += 1
             else:
-                markdown, reason = build_git_context_markdown(root)
+                markdown, reason = build_git_context_markdown(root, exclude_dirs=exclude_dirs)
                 if markdown is None:
                     print(f"⚠️  No se pudo generar {git_context_arcname}: {reason}")
                     ign += 1
@@ -644,6 +713,18 @@ def build_parser() -> argparse.ArgumentParser:
         dest="include_git_context",
         help=f"Incluye {GIT_CONTEXT_FILENAME} con el diff del último commit confirmado."
     )
+    parser.add_argument(
+        "--exclude",
+        "--exclude-path",
+        "-e",
+        "-E",
+        "-I",
+        action="append",
+        default=[],
+        dest="exclude_paths",
+        metavar="REL_DIR",
+        help="Excluye una carpeta relativa al proyecto y todos sus hijos. Repetible."
+    )
     parser.add_argument("--no-env-example", action="store_false", dest="include_env_example", 
                         default=CONFIG_INCLUDE_ENV, help="No incluir archivos .env.example.")
     parser.add_argument("folder", nargs="?", default=".", help="Carpeta a procesar.")
@@ -676,8 +757,10 @@ def main():
     if not root.is_dir():
         raise SystemExit(f"❌ La ruta no es una carpeta: {root}")
 
+    cli_exclude_dirs = normalize_cli_exclude_paths(root, args.exclude_paths)
+
     if args.copy_git_context:
-        status, findings = copy_git_context_to_clipboard(root, force=args.force)
+        status, findings = copy_git_context_to_clipboard(root, force=args.force, exclude_dirs=cli_exclude_dirs)
         print_findings(findings)
         status_msgs = {
             "copied": f"✅ {GIT_CONTEXT_FILENAME} copiado al portapapeles.",
@@ -697,7 +780,8 @@ def main():
 
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
-    ignore_patterns = DEFAULT_IGNORE + load_aiignore(root)
+    runtime_exclude_patterns = build_runtime_exclude_patterns(cli_exclude_dirs)
+    ignore_patterns = DEFAULT_IGNORE + load_aiignore(root) + runtime_exclude_patterns
     pass_patterns = load_aipass(root)
     
     incl, ign, total_findings = create_zip(
@@ -708,6 +792,7 @@ def main():
         args.include_env_example,
         args.force,
         include_git_context=args.include_git_context,
+        exclude_dirs=cli_exclude_dirs,
     )
     
     print_findings(total_findings)

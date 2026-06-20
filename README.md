@@ -52,6 +52,12 @@ packai . --copy path --output mi_respaldo.zip
 
 # Copiar únicamente el contexto/diff del último commit al portapapeles
 packai . -c
+
+# Excluir una carpeta relativa al proyecto y todos sus hijos
+packai . -e "datos"
+
+# Excluir varias carpetas en caliente
+packai . -e "datos" -e "cache/tmp"
 ```
 
 ### Opciones disponibles
@@ -62,9 +68,22 @@ packai . -c
 | `--copy` | `file`, `path`, `none` | Qué se copia al portapapeles (por defecto: `file`). |
 | `--output` | `[ruta]` | Ruta del ZIP generado. Por defecto se nombra como `[Proyecto]-[Commit]-[Hash].zip`. |
 | `--force`, `-f` | (flag) | Forzar la inclusión de archivos con alertas de seguridad (falsos positivos), **excepto archivos .env y variantes** que siempre se excluyen. |
+| `--exclude`, `--exclude-path`, `-e`, `-E`, `-I` | `REL_DIR` | Excluye una carpeta relativa a la carpeta principal procesada y todos sus hijos. Se puede repetir. No acepta rutas absolutas ni rutas con `..`. |
 | `--commit-clipboard`, `-c` | (flag) | Copia al portapapeles el Markdown de `git--diff_last_commit.md` para el último commit confirmado, sin crear ZIP. |
 | `-g` | (flag) | Incluye `git--diff_last_commit.md` con el diff del último commit confirmado. |
 | `--no-env-example` | (flag) | Si se activa, excluye archivos `.env.example` y similares. |
+
+### Excluir carpetas desde CLI
+
+```bash
+packai . -e "datos"
+packai . -e "datos" -e "cache/tmp"
+packai C:\Ruta\De\Mi\Proyecto -e "datos"
+```
+
+La ruta de `-e` siempre se interpreta relativa a la carpeta principal que se está empaquetando. Por ejemplo, si ejecutas `packai . -e "datos"` desde la raíz de `miproyecto`, se excluye `miproyecto/datos/` y todo su contenido. No se excluye automáticamente otro directorio llamado `datos` en otra ubicación, como `src/datos/`.
+
+La herramienta valida que la ruta no sea absoluta, no use `..`, exista dentro del proyecto y sea una carpeta. Si usas `-g` o `-c`, la misma exclusión se aplica también al contexto Git generado.
 
 ### Copiar solo el contexto del último commit
 

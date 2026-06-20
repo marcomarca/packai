@@ -7,9 +7,11 @@ from pack_ai import (
     build_default_zip_stem,
     build_git_context_markdown,
     build_parser,
+    build_runtime_exclude_patterns,
     create_zip,
     get_git_commit_info,
     GIT_CONTEXT_FILENAME,
+    normalize_cli_exclude_paths,
     scan_file_for_secrets,
     should_ignore_path,
     copy_git_context_to_clipboard,
@@ -539,3 +541,68 @@ def test_copy_git_context_to_clipboard_allows_secret_with_force():
     assert len(findings) == 1
     assert findings[0]["forced"] is True
     mock_copy.assert_called_once_with(markdown)
+
+
+def test_argparse_exclude_paths_repeated_and_aliases():
+    args = build_parser().parse_args([".", "-e", "datos", "-I", "cache/tmp", "-E", "logs"])
+
+    assert args.exclude_paths == ["datos", "cache/tmp", "logs"]
+
+
+def test_normalize_cli_exclude_paths_accepts_only_project_relative_dirs(temp_project):
+    data_dir = temp_project / "datos"
+    data_dir.mkdir()
+
+    assert normalize_cli_exclude_paths(temp_project, ["datos", "./datos", "datos/"]) == ["datos"]
+
+    with pytest.raises(SystemExit):
+        normalize_cli_exclude_paths(temp_project, [str(data_dir.resolve())])
+    with pytest.raises(SystemExit):
+        normalize_cli_exclude_paths(temp_project, ["../datos"])
+    with pytest.raises(SystemExit):
+        normalize_cli_exclude_paths(temp_project, ["C:\\datos"])
+    with pytest.raises(SystemExit):
+        normalize_cli_exclude_paths(temp_project, ["no-existe"])
+
+
+def test_cli_exclude_path_is_root_relative_and_recursive(temp_project):
+    root_data = temp_project / "datos"
+    nested_data = temp_project / "src" / "datos"
+    root_data.mkdir()
+    nested_data.mkdir(parents=True)
+    (root_data / "omitido.py").write_text("print('omitido')", encoding="utf-8")
+    (nested_data / "incluido.py").write_text("print('incluido')", encoding="utf-8")
+    (temp_project / "main.py").write_text("print('main')", encoding="utf-8")
+
+    exclude_dirs = normalize_cli_exclude_paths(temp_project, ["datos"])
+    patterns = build_runtime_exclude_patterns(exclude_dirs)
+    zip_path = temp_project.parent / "test_cli_exclude.zip"
+
+    create_zip(temp_project, zip_path, patterns, [], True)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        assert "datos/omitido.py" not in names
+        assert "src/datos/incluido.py" in names
+        assert "main.py" in names
+
+
+def test_git_context_uses_cli_exclude_pathspecs():
+    calls = []
+
+    def fake_git(root, args):
+        calls.append(args)
+        if args == ["rev-parse", "--is-inside-work-tree"]:
+            return "true"
+        if args[:1] == ["rev-parse"] or args[:1] == ["log"]:
+            return "value"
+        return ""
+
+    with patch("pack_ai.run_git_command", side_effect=fake_git):
+        build_git_context_markdown(Path("."), exclude_dirs=["datos", "cache/tmp"])
+
+    git_show_calls = [args for args in calls if args[:1] == ["show"]]
+    assert len(git_show_calls) == 3
+    for args in git_show_calls:
+        assert ":(exclude)datos/**" in args
+        assert ":(exclude)cache/tmp/**" in args
