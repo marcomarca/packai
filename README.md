@@ -8,7 +8,7 @@
 - **🛡️ Auditoría de Secretos**: Escaneo proactivo de claves API, tokens y credenciales con reportes detallados (tipo y número de línea).
 - **🌳 Visualización Estructurada**: Muestra un árbol real del contenido que se está empaquetando.
 - **📋 Copiado Automático**: Copia el archivo ZIP resultante directamente al portapapeles (en Windows).
-- **⚙️ Configuración Flexible**: Soporte para archivos `.aiignore` (exclusión total) y `.aipass` (inclusión sin escaneo).
+- **⚙️ Configuración Flexible**: Soporte para `.ignore2packai` (exclusión total).
 - **📄 Manejo Inteligente de Entornos**: Permite incluir archivos `.env.example`, `.env.sample` y `.env.template` de forma segura (siempre que no contengan secretos reales).
 - **🏷️ Versionado Automático**: El nombre del ZIP incluye el último commit de Git y su hash para facilitar el seguimiento de versiones.
 
@@ -119,8 +119,7 @@ Los archivos `.env`, `.env.local`, `.env.production` y variantes reales nunca se
 
 ## ⚙️ Configuración Personalizada
 
-- **`.aiignore`**: Permite definir patrones de exclusión simples (tipo `fnmatch`). Lo que coincida no entrará en el ZIP.
-- **`.aipass`**: Permite que archivos listados se incluyan sin pasar por el detector de secretos (útil para falsos positivos). El propio archivo `.aipass` nunca entra al ZIP, incluso con `-f`. **Nota importante**: No anula las exclusiones globales de seguridad (como `.git`, `node_modules`, carpetas ocultas tipo `.tmp/` o `.uv-python/`, `.env`, etc.); esos archivos siempre se ignorarán. Se mostrará una advertencia `⚠️` por seguridad.
+- **`.ignore2packai`**: Permite definir patrones de exclusión simples (tipo `fnmatch`). Lo que coincida no entrará en el ZIP.
 - **`config_pack_ai.py`**: Archivo central para cambiar comportamientos por defecto del script.
 
 ## 🛡️ Seguridad y Limitaciones

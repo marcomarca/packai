@@ -60,8 +60,6 @@ DEFAULT_IGNORE = [
 
 # Archivos sensibles que se excluyen siempre por nombre
 STRICT_EXCLUDE_PATTERNS = [
-    ".aipass",
-    "**/.aipass",
     ".env",
     ".env.*",
     "**/.env",
@@ -69,7 +67,7 @@ STRICT_EXCLUDE_PATTERNS = [
 ]
 
 SECRET_FILE_PATTERNS = [
-    ".aipass", ".env", ".env.*", "*.env", "*.pem", "*.key", "*.p8", "*.p12", "*.pfx",
+    ".env", ".env.*", "*.env", "*.pem", "*.key", "*.p8", "*.p12", "*.pfx",
     "*.crt", "*.cer", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
     "known_hosts", "authorized_keys", ".npmrc", ".pypirc", ".netrc", ".dockercfg",
     "docker-compose.override.yml", "credentials", "credentials.json",
@@ -147,13 +145,9 @@ def load_ignore_file(path: Path) -> list[str]:
     
     raise SystemExit(f"❌ No se pudo decodificar {path} (probablemente binario o formato inválido)")
 
-def load_aiignore(root: Path) -> list[str]:
+def load_project_ignore(root: Path) -> list[str]:
     """Carga patrones de exclusión total del ZIP."""
-    return load_ignore_file(root / ".aiignore")
-
-def load_aipass(root: Path) -> list[str]:
-    """Carga patrones de archivos que saltan el escáner pero se incluyen en el ZIP."""
-    return load_ignore_file(root / ".aipass")
+    return load_ignore_file(root / ".ignore2packai")
 
 def is_probably_binary(path: Path, sample_size: int = 4096) -> bool:
     """Detecta si un archivo es probablemente binario buscando bytes nulos."""
@@ -264,7 +258,7 @@ def should_ignore_path(relative_path: str, patterns: list[str], include_env_exam
             if any(fnmatch.fnmatch(name, p) for p in SECRET_FILE_PATTERNS):
                 return "sensitive"
     
-    # 3. Patrones de usuario (aiignore, defaults, aipass)
+    # 3. Patrones de usuario y valores predeterminados
     for p in patterns:
         p = p.strip().replace("\\", "/")
         if not p: continue
@@ -523,7 +517,6 @@ def create_zip(
     root: Path,
     output_zip: Path,
     ignore_patterns: list[str],
-    pass_patterns: list[str],
     include_env_example: bool,
     force: bool = False,
     include_git_context: bool = False,
@@ -578,18 +571,11 @@ def create_zip(
                         ign += 1; continue
                     forced_by_name = True
                 
-                # 2. .aipass (bypass scanner)
-                if should_ignore_path(rel, pass_patterns, ignore_secrets=True) == "pattern":
-                    zipf.write(path, arcname=rel)
-                    included_names.add(rel)
-                    print(f"{indent_file}    ⚠️  Incluido sin escaneo por .aipass: {f}")
-                    incl += 1; continue
-
-                # 3. Detectar si es binario por contenido
+                # 2. Detectar si es binario por contenido
                 if is_probably_binary(path):
                     ign += 1; continue
 
-                # 4. Escaneo normal
+                # 3. Escaneo normal
                 f_findings = scan_file_for_secrets(path)
                 if f_findings:
                     findings.append({
@@ -781,14 +767,12 @@ def main():
     out_zip = Path(args.output).expanduser().resolve() if args.output else root.parent / f"{name}.zip"
 
     runtime_exclude_patterns = build_runtime_exclude_patterns(cli_exclude_dirs)
-    ignore_patterns = DEFAULT_IGNORE + load_aiignore(root) + runtime_exclude_patterns
-    pass_patterns = load_aipass(root)
+    ignore_patterns = DEFAULT_IGNORE + load_project_ignore(root) + runtime_exclude_patterns
     
     incl, ign, total_findings = create_zip(
         root,
         out_zip,
         ignore_patterns,
-        pass_patterns,
         args.include_env_example,
         args.force,
         include_git_context=args.include_git_context,

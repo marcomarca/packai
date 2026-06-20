@@ -35,49 +35,6 @@ def test_large_file_scan_no_crash(temp_project):
     assert len(findings) == 1
     assert findings[0]["type"] == "Archivo demasiado grande para escaneo"
 
-def test_aipass_exclusion_from_zip(temp_project):
-    """Verifica que .aipass no se incluya en el ZIP final."""
-    (temp_project / ".aipass").write_text("dummy", encoding="utf-8")
-    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
-    
-    zip_path = temp_project.parent / "test.zip"
-    create_zip(temp_project, zip_path, [], [], True)
-    
-    with zipfile.ZipFile(zip_path, "r") as z:
-        names = z.namelist()
-        assert "code.py" in names
-        assert ".aipass" not in names
-
-def test_aipass_excluded_even_with_force(temp_project):
-    """Verifica que .aipass no se incluya ni con --force."""
-    (temp_project / ".aipass").write_text("secret.py", encoding="utf-8")
-    (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
-
-    zip_path = temp_project.parent / "test.zip"
-    create_zip(temp_project, zip_path, [], [], True, force=True)
-
-    with zipfile.ZipFile(zip_path, "r") as z:
-        names = z.namelist()
-        assert "code.py" in names
-        assert ".aipass" not in names
-
-def test_aipass_bypass_scanner(temp_project):
-    """Verifica que archivos en .aipass se incluyan sin ser escaneados."""
-    # Archivo con secreto que normalmente sería bloqueado
-    secret_file = temp_project / "secret.py"
-    secret_file.write_text("API_KEY=" + "'sk" + "-12345678901234567890123456789012'", encoding="utf-8")
-    
-    # Añadir a .aipass
-    (temp_project / ".aipass").write_text("secret.py", encoding="utf-8")
-    
-    zip_path = temp_project.parent / "test.zip"
-    incl, ign, findings = create_zip(temp_project, zip_path, [], ["secret.py"], True)
-    
-    assert incl == 1
-    assert len(findings) == 0
-    with zipfile.ZipFile(zip_path, "r") as z:
-        assert "secret.py" in z.namelist()
-
 def test_env_example_inclusion(temp_project):
     """Verifica que .env.example se incluya si está limpio."""
     env_ex = temp_project / ".env.example"
@@ -85,7 +42,7 @@ def test_env_example_inclusion(temp_project):
     
     zip_path = temp_project.parent / "test.zip"
     # Pasamos ignore_patterns vacíos para que solo actúen los SECRET_FILE_PATTERNS internos
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True)
     
     assert incl == 1
     with zipfile.ZipFile(zip_path, "r") as z:
@@ -98,7 +55,7 @@ def test_env_example_exclusion_with_secret(temp_project):
     env_ex.write_text("OPENAI_KEY=" + "sk" + "-12345678901234567890123456789012", encoding="utf-8")
     
     zip_path = temp_project.parent / "test.zip"
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True)
     
     assert incl == 0
     assert len(findings) >= 1
@@ -108,7 +65,7 @@ def test_env_example_excluded_with_no_env_example(temp_project):
     env_ex.write_text("DB_HOST=localhost", encoding="utf-8")
 
     zip_path = temp_project.parent / "test.zip"
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], False)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], False)
 
     assert incl == 0
     with zipfile.ZipFile(zip_path, "r") as z:
@@ -152,7 +109,7 @@ def test_hidden_dot_directory_excluded_from_zip(temp_project):
     (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
 
     zip_path = temp_project.parent / "test_hidden_dirs.zip"
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True)
 
     assert incl == 2
     assert findings == []
@@ -234,7 +191,7 @@ def test_force_inclusion_with_secret(temp_project):
     
     zip_path = temp_project.parent / "test_force.zip"
     # force=True
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=True)
     
     assert incl == 1
     assert len(findings) == 1
@@ -249,7 +206,7 @@ def test_strict_env_exclusion_even_with_force(temp_project):
     
     zip_path = temp_project.parent / "test_env.zip"
     # force=True
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=True)
     
     assert incl == 0
     assert ign >= 1
@@ -266,11 +223,11 @@ def test_sensitive_filename_forced(temp_project):
     zip_path = temp_project.parent / "test_sensitive.zip"
     
     # Without force
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=False)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=False)
     assert incl == 0
     
     # With force
-    incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True)
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=True)
     assert incl == 1
     assert any(f["reason"] == "sensitive_forced" for f in findings)
 
@@ -279,7 +236,7 @@ def test_git_context_not_included_by_default(temp_project):
     zip_path = temp_project.parent / "test.zip"
 
     with patch("pack_ai.build_git_context_markdown") as mock_build:
-        create_zip(temp_project, zip_path, [], [], True, include_git_context=False)
+        create_zip(temp_project, zip_path, [], True, include_git_context=False)
 
     mock_build.assert_not_called()
     with zipfile.ZipFile(zip_path, "r") as z:
@@ -291,7 +248,7 @@ def test_git_context_included_with_g(temp_project):
     markdown = "```diff\n+print('hello')\n```"
 
     with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
-        create_zip(temp_project, zip_path, [], [], True, include_git_context=True)
+        create_zip(temp_project, zip_path, [], True, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         assert GIT_CONTEXT_FILENAME in z.namelist()
@@ -303,7 +260,7 @@ def test_git_context_secret_excluded_without_force(temp_project):
     markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
 
     with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
-        incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=False, include_git_context=True)
+        incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=False, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         assert GIT_CONTEXT_FILENAME not in z.namelist()
@@ -315,7 +272,7 @@ def test_git_context_secret_included_with_force(temp_project):
     markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
 
     with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
-        incl, ign, findings = create_zip(temp_project, zip_path, [], [], True, force=True, include_git_context=True)
+        incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=True, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         assert GIT_CONTEXT_FILENAME in z.namelist()
@@ -326,7 +283,7 @@ def test_git_context_collision_is_not_overwritten(temp_project):
     zip_path = temp_project.parent / "test.zip"
 
     with patch("pack_ai.build_git_context_markdown", return_value=("GENERATED FILE", None)):
-        create_zip(temp_project, zip_path, [], [], True, include_git_context=True)
+        create_zip(temp_project, zip_path, [], True, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         names = z.namelist()
@@ -391,7 +348,7 @@ def test_env_excluded_without_force(temp_project):
     (temp_project / ".env").write_text("TOKEN=abc", encoding="utf-8")
     zip_path = temp_project.parent / "test.zip"
 
-    create_zip(temp_project, zip_path, [], [], True, force=False)
+    create_zip(temp_project, zip_path, [], True, force=False)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         assert ".env" not in z.namelist()
@@ -400,7 +357,7 @@ def test_env_excluded_even_with_force(temp_project):
     (temp_project / ".env").write_text("TOKEN=abc", encoding="utf-8")
     zip_path = temp_project.parent / "test.zip"
 
-    create_zip(temp_project, zip_path, [], [], True, force=True)
+    create_zip(temp_project, zip_path, [], True, force=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         assert ".env" not in z.namelist()
@@ -414,7 +371,7 @@ def test_env_variants_excluded_even_with_force(temp_project):
     (nested / ".env.local").write_text("TOKEN=abc", encoding="utf-8")
     zip_path = temp_project.parent / "test.zip"
 
-    create_zip(temp_project, zip_path, [], [], True, force=True)
+    create_zip(temp_project, zip_path, [], True, force=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         names = z.namelist()
@@ -471,7 +428,7 @@ def test_git_context_summary_is_minimal_for_force_and_clipboard_paths(temp_proje
 
     zip_path = temp_project.parent / "test.zip"
     with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
-        create_zip(temp_project, zip_path, [], [], True, force=True, include_git_context=True)
+        create_zip(temp_project, zip_path, [], True, force=True, include_git_context=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         zipped_markdown = z.read(GIT_CONTEXT_FILENAME).decode("utf-8")
@@ -578,7 +535,7 @@ def test_cli_exclude_path_is_root_relative_and_recursive(temp_project):
     patterns = build_runtime_exclude_patterns(exclude_dirs)
     zip_path = temp_project.parent / "test_cli_exclude.zip"
 
-    create_zip(temp_project, zip_path, patterns, [], True)
+    create_zip(temp_project, zip_path, patterns, True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         names = z.namelist()
