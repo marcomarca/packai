@@ -52,7 +52,7 @@ ALLOWED_DOT_DIR_NAMES = {".github"}
 
 # Extensiones o patrones de archivos basura adicionales
 DEFAULT_IGNORE = [
-    "*.log", "*.tmp", "*.cache", "*.zip", "*.tar", "*.gz", "*.rar", "*.7z",
+    "*.pyc", "*.pyo", "*.log", "*.tmp", "*.cache", "*.zip", "*.tar", "*.gz", "*.rar", "*.7z",
     "*.sqlite", "*.db", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.mp4",
     "*.mov", "*.pdf", "*.xlsx", "*.docx", "*.exe", "*.dll", "*.so", "*.dylib",
     "*.jar", "*.war", "*.wasm", "*.bin", "*.dat", "*.class", "*.o", "*.obj",
