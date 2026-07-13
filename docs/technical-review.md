@@ -1,61 +1,65 @@
 # Revisión técnica
 
-## Diagnóstico del estado recibido
+## Riesgos originales para el crecimiento
 
-### Bloqueantes para crecimiento
+1. El recorrido, seguridad, Git, portapapeles y CLI estaban concentrados en un módulo único.
+2. No existía un contrato que una GUI pudiera consumir sin capturar `stdout`.
+3. La salida no era atómica.
+4. Las dependencias externas no eran sustituibles.
+5. No había contratos explícitos de métricas ni una fuente de verdad compartida con el ZIP.
 
-1. **Módulo único de más de 700 líneas.** El recorrido de archivos, reglas de seguridad, Git, portapapeles, CLI y presentación compartían estado global y llamadas directas.
-2. **Ausencia de contrato de aplicación.** Una GUI habría tenido que llamar funciones de bajo nivel, capturar `stdout` y reconstruir reglas de exclusión.
-3. **Salida no atómica.** El ZIP de destino se abría directamente; un fallo durante el recorrido podía dejar una salida parcial o reemplazar una anterior válida.
-4. **Empaquetado Python incompleto.** No existía paquete `src/`, entry point instalable ni build backend declarado.
-5. **Tipos inconsistentes.** `FileFinding` no declaraba el campo `forced` que sí se producía y consumía en ejecución.
-6. **Dependencias externas rígidas.** Git y portapapeles se invocaban desde la misma capa que las reglas de negocio.
-7. **Gate incompleto.** Había pruebas de regresión útiles, pero no lint, tipado, cobertura, CI ni pruebas explícitas de contrato.
-8. **Decisiones no documentadas.** Las invariantes de seguridad y compatibilidad estaban dispersas entre código, README y tests.
+## Arquitectura vigente
 
-## Solución aplicada
+- `PackService` expone `pack` y `preview`.
+- `PackRequest`, `PackPreview`, `PackResult` y `PackMetrics` son contratos inmutables.
+- `GitContextProvider` y `TokenEstimator` son puertos sustituibles.
+- `ArchiveService` construye un `ArchivePlan` con los bytes exactos que se analizarán y escribirán.
+- El ZIP usa temporal y reemplazo atómico.
+- `pack_ai.py` conserva la superficie 1.x.
 
-- Se creó `src/packai` con límites de módulo explícitos.
-- `PackRequest`, `PackResult`, hallazgos y eventos son dataclasses inmutables.
-- `PackService` es la API recomendada para CLI, GUI y futuras integraciones.
-- `GitContextProvider` permite sustituir Git por un fake o un adaptador alternativo.
-- `ArchiveService` escribe en temporal y usa reemplazo atómico.
-- `pack_ai.py` conserva la superficie 1.x y adapta contratos nuevos a diccionarios heredados.
-- Se agregó entry point `packai`, layout `src`, `.python-version`, build backend y lockfile actualizado.
-- Se separaron pruebas unitarias, de contrato y caracterización.
-- Se configuraron Ruff, mypy estricto, cobertura mínima y CI para Python 3.12/3.13.
-- Se documentaron arquitectura, dominio, estrategia de pruebas y ADR.
+## Mejora de métricas
+
+La versión 2.1 añade:
+
+- archivos incluidos, textuales y binarios;
+- tamaño exacto sin comprimir;
+- tamaño físico del ZIP después de crearlo;
+- tokens estimados sobre contenido textual;
+- ranking configurable mediante `token_top` y `--token-top`;
+- preview sin compresión;
+- `tiktoken:o200k_base` como método principal;
+- fallback degradado por bytes UTF-8;
+- imágenes raster y PDF permitidos por firma, sin aporte de tokens;
+- exclusión explícita de ejecutables y binarios desconocidos.
 
 ## Contratos que futuras actualizaciones deben respetar
 
-1. `PackService.pack(PackRequest, reporter) -> PackResult` no imprime ni depende de framework.
-2. Los eventos de progreso se agregan de forma compatible; no se cambia el significado de eventos existentes sin versión mayor.
-3. Los errores esperados heredan de `PackAIError`.
-4. `.env` y variantes reales permanecen como exclusión estricta.
-5. Los hallazgos exponen valores enmascarados, nunca secretos completos.
-6. La salida anterior se conserva ante fallo antes de `os.replace`.
-7. La fachada `pack_ai.py` permanece cubierta por pruebas hasta una retirada documentada.
-8. Todo comportamiento nuevo incluye prueba en la capa mínima adecuada.
+1. `PackService.pack` y `PackService.preview` no imprimen ni dependen de framework.
+2. Una misma operación calcula y comprime los mismos bytes.
+3. La tokenización no modifica el contenido archivado.
+4. `PackResult.metrics` puede ser `None` si el análisis completo falla; el ZIP sigue siendo válido.
+5. `PackPreview.metrics.zip_size` es `None` porque no se realizó compresión.
+6. Los binarios permitidos aportan cantidad y tamaño, pero no tokens.
+7. Ejecutables y binarios desconocidos no se incluyen ni con `force`.
+8. `.env` y variantes reales permanecen como exclusión estricta.
+9. Los hallazgos contienen valores enmascarados.
+10. La salida anterior se conserva ante fallos previos a `os.replace`.
 
 ## Riesgos residuales
 
-- La detección de secretos sigue siendo heurística y basada en regex; requiere revisión manual y evolución de patrones.
-- El portapapeles continúa siendo un adaptador orientado a PowerShell. Una GUI multiplataforma debe proporcionar su propia integración.
-- El recorrido y escaneo son secuenciales. Antes de paralelizar se debe medir y preservar orden determinista, cancelación y atomicidad.
-- Los archivos mayores de 1 MiB se tratan como hallazgo no escaneable. Si se cambia esa política, debe existir límite configurable y pruebas de memoria/rendimiento.
-- `.ignore2packai` usa semántica `fnmatch`, no semántica completa de `.gitignore`; cambiarlo sería un cambio de comportamiento que exige migración.
-
-## Siguiente evolución recomendada
-
-La primera GUI debería ser un adaptador delgado: selección de raíz/salida, edición de `PackRequest`, render de `ProgressEvent`, cancelación cooperativa y presentación de `PackResult`. No debe duplicar escaneo, exclusiones ni generación Git.
+- El plan conserva temporalmente todo el contenido incluido en memoria. El supuesto operativo actual es un proyecto inferior a 100 MB.
+- PDF e imágenes se validan por firma, pero no se inspecciona su contenido interno para secretos.
+- El conteo es exacto para `o200k_base`, pero sigue siendo una estimación del costo de un modelo concreto porque cada modelo puede aplicar otro encoding o envolver el contenido con tokens adicionales.
+- El fallback heurístico es deliberadamente aproximado y se marca como degradado.
+- La detección de secretos continúa basada en expresiones regulares.
+- Una preview puede quedar obsoleta si los archivos cambian antes del pack; el pack siempre genera su propia instantánea actual.
 
 ## Verificación de esta entrega
 
-La corrección de portabilidad se verificó con Python 3.13.5:
-
-- `pytest`: 51 pruebas aprobadas.
-- `pytest --cov=packai --cov-fail-under=70`: 74.21% de cobertura.
-- La regresión simula el `NotADirectoryError` observado en Windows y exige que los adaptadores Git lo traduzcan a ausencia de contexto, sin propagar la excepción.
-- El `uv.lock` del usuario no fue modificado y no forma parte del ZIP de entrega.
-
-Los controles `ruff` y `mypy` permanecían correctos en la ejecución de Windows aportada antes de esta corrección.
+- Ruff format/check: correcto.
+- mypy estricto: correcto en 16 módulos.
+- Pytest: 59 pruebas aprobadas.
+- Cobertura: 75.54%, con gate mínimo de 70%.
+- Smoke test: texto, PNG y PDF incluidos; ejecutable excluido; tamaños del reporte coinciden con el ZIP.
+- El entorno aislado no tenía `tiktoken` instalado, por lo que el smoke test ejercitó el fallback. El adapter principal queda cubierto por contrato e import dinámico y debe verificarse tras actualizar el lockfile propio.
+- `uv.lock` no fue creado, modificado ni incluido.

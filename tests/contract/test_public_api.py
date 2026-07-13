@@ -3,7 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import pack_ai
-from packai import PackRequest, PackResult, PackService, ProgressEvent
+from packai import (
+    FileTokenMetrics,
+    PackMetrics,
+    PackPreview,
+    PackRequest,
+    PackResult,
+    PackService,
+    ProgressEvent,
+    TokenEstimator,
+)
 
 
 def test_new_public_api_exports_frontend_contracts() -> None:
@@ -11,6 +20,11 @@ def test_new_public_api_exports_frontend_contracts() -> None:
     assert PackResult.__module__ == "packai.contracts"
     assert ProgressEvent.__module__ == "packai.contracts"
     assert callable(PackService().pack)
+    assert callable(PackService().preview)
+    assert PackPreview.__module__ == "packai.contracts"
+    assert PackMetrics.__module__ == "packai.contracts"
+    assert FileTokenMetrics.__module__ == "packai.contracts"
+    assert hasattr(TokenEstimator, "estimate")
 
 
 def test_legacy_facade_preserves_existing_callable_surface(tmp_path: Path) -> None:

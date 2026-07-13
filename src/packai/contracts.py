@@ -56,8 +56,52 @@ ProgressReporter = Callable[[ProgressEvent], None]
 
 
 @dataclass(frozen=True, slots=True)
+class TokenEstimate:
+    """One token estimate and the method that produced it."""
+
+    count: int
+    method: str
+    degraded: bool = False
+
+
+class TokenEstimator(Protocol):
+    """Replaceable token-counting port used by services and front ends."""
+
+    name: str
+
+    def estimate(self, text: str) -> TokenEstimate:
+        """Estimate tokens without mutating the supplied text."""
+
+
+@dataclass(frozen=True, slots=True)
+class FileTokenMetrics:
+    """Token contribution of one textual archive member."""
+
+    relative_path: str
+    token_count: int
+    uncompressed_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class PackMetrics:
+    """Ephemeral metrics calculated from the exact bytes selected for packing."""
+
+    included_files: int
+    text_files: int
+    binary_files: int
+    uncompressed_size: int
+    zip_size: int | None
+    estimated_tokens: int
+    largest_token_files: tuple[FileTokenMetrics, ...]
+    tokenizer: str
+    degraded: bool
+    complete: bool
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class PackRequest:
-    """Validated input boundary for creating one archive."""
+    """Validated input boundary for creating or previewing one archive."""
 
     root: Path
     output_zip: Path
@@ -66,6 +110,19 @@ class PackRequest:
     include_git_context: bool = False
     exclude_paths: tuple[str, ...] = ()
     extra_ignore_patterns: tuple[str, ...] = ()
+    token_top: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class PackPreview:
+    """Pre-compression result suitable for a future graphical preview."""
+
+    output_zip: Path
+    included_count: int
+    ignored_count: int
+    findings: tuple[FileFinding, ...]
+    included_files: tuple[str, ...]
+    metrics: PackMetrics | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +134,7 @@ class PackResult:
     ignored_count: int
     findings: tuple[FileFinding, ...]
     included_files: tuple[str, ...]
+    metrics: PackMetrics | None = None
 
 
 @dataclass(frozen=True, slots=True)

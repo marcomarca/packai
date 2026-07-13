@@ -1,10 +1,12 @@
 [project]
 name = "pack-ai"
-version = "2.0.0"
+version = "2.1.0"
 description = "Package a project into a ZIP optimized for AI review while excluding common secrets and heavy files."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "tiktoken",
+]
 
 [project.scripts]
 packai = "packai.cli:main"

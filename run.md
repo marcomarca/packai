@@ -1,12 +1,13 @@
 # Comandos recomendados
 
-> Este ZIP no incluye ni modifica `uv.lock`. Los comandos siguientes usan el `uv.lock` existente en tu repositorio.
+> Este ZIP no incluye ni modifica `uv.lock`. `pyproject.toml` añade `tiktoken`; actualiza tu propio lockfile después de integrar los cambios.
 
-## Preparar el entorno
+## Resolver la nueva dependencia en tu lockfile
 
 ```bash
 pyenv install -s 3.12.10
 pyenv local 3.12.10
+uv lock
 uv sync --locked
 ```
 
@@ -23,17 +24,29 @@ uv run pytest --cov=packai --cov-fail-under=70
 ## Pruebas dirigidas
 
 ```bash
+uv run pytest tests/unit/test_metrics.py
 uv run pytest tests/unit
 uv run pytest tests/contract
 uv run pytest tests/test_pack_ai.py
 ```
 
-## Smoke test del paquete y CLI
+## Verificar tokenizador principal
 
 ```bash
-uv run python -c "from packai import PackService, PackRequest; print(PackService, PackRequest)"
-uv run packai --version
-uv run packai . --copy none --output ../pack-ai-smoke.zip
+uv run python -c "from packai.tokenization import build_default_token_estimator; e=build_default_token_estimator(); r=e.estimate('hola mundo'); print(r)"
 ```
 
-En Windows, el último comando también puede ejecutarse después de `install.ps1` como `packai . --copy none --output ..\pack-ai-smoke.zip`.
+El resultado normal debe indicar `tiktoken:o200k_base` y `degraded=False`. Si aparece `heuristic:utf8-bytes/4`, el ZIP seguirá funcionando, pero el entorno no pudo cargar `tiktoken`.
+
+## Smoke test de métricas y CLI
+
+```bash
+uv run packai --version
+uv run packai . --copy none --token-top 10 --output ../pack-ai-smoke.zip
+```
+
+## Preview para una futura GUI
+
+```bash
+uv run python -c "from pathlib import Path; from packai import PackRequest, PackService; p=PackService().preview(PackRequest(root=Path('.'), output_zip=Path('../preview.zip'))); print(p.metrics); assert not Path('../preview.zip').exists()"
+```

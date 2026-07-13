@@ -8,22 +8,29 @@
 
 ### Unitarias
 
-`tests/unit/` prueba el caso de uso y los servicios sin depender de consola ni Git real. Incluye:
+`tests/unit/` verifica:
 
-- resultado inmutable y neutral respecto de UI;
-- eventos de progreso;
-- normalización de exclusiones;
-- proveedor Git inyectado;
+- contratos inmutables y neutrales respecto de UI;
+- eventos y exclusiones normalizadas;
 - preservación atómica de una salida anterior;
-- errores de validación.
+- métricas derivadas de los mismos bytes escritos;
+- preview sin creación de ZIP;
+- ranking configurable por tokens;
+- inclusión de imágenes y PDF con firma válida;
+- exclusión de ejecutables incluso con extensión engañosa;
+- preservación de bytes en codificaciones heredadas;
+- fallback heurístico del tokenizador;
+- creación del ZIP aunque falle completamente el análisis de métricas.
+
+Los estimadores falsos hacen que las pruebas de dominio sean deterministas y no dependan de una versión concreta de `tiktoken`.
 
 ### Contratos
 
-`tests/contract/` protege la superficie importable nueva y la fachada heredada. Un cambio incompatible requiere una decisión explícita de versión mayor y una guía de migración.
+`tests/contract/` protege `PackService.pack`, `PackService.preview`, `PackRequest`, `PackResult`, `PackPreview`, `PackMetrics`, `TokenEstimator` y la fachada heredada.
 
 ### Integración
 
-Las pruebas que abren el ZIP verifican serialización real con `zipfile`. Git y portapapeles se aíslan porque dependen del entorno del sistema.
+Las pruebas abren ZIP reales y comparan bytes. Git y portapapeles se aíslan porque dependen del sistema. Un smoke test con `tiktoken` instalado debe comprobar que el método informado sea `tiktoken:o200k_base` y no degradado.
 
 ## Gate local y CI
 
@@ -35,12 +42,12 @@ uv run pytest
 uv run pytest --cov=packai --cov-fail-under=70
 ```
 
-El umbral inicial es 70%. Debe subir al agregar comportamiento nuevo; no debe reducirse para ocultar una regresión.
+El umbral mínimo es 70%. No debe reducirse para ocultar una regresión.
 
 ## Regla para cambios
 
-- Cambio de regla: prueba unitaria o parametrizada en `policy`.
-- Nuevo adaptador: prueba de contrato con un fake y prueba de integración del adaptador cuando el entorno lo permita.
-- Corrección de bug: reproducción mínima antes del arreglo y prueba de regresión posterior.
-- Cambio de contrato público: ADR, versión mayor y prueba de migración/compatibilidad.
-- Nueva GUI: sus pruebas no deben sustituir las pruebas del núcleo.
+- Nuevo formato binario permitido: firma explícita, prueba positiva, prueba de extensión falsa y documentación de seguridad.
+- Nuevo tokenizador: implementación de `TokenEstimator`, pruebas deterministas y política de fallback.
+- Cambio de contrato público: ADR y prueba de contrato.
+- Corrección de bug: reproducción mínima y prueba de regresión.
+- Nueva GUI: debe consumir `preview`/`pack`; no debe duplicar clasificación, métricas ni tokenización.

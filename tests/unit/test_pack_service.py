@@ -86,7 +86,7 @@ def test_archive_creation_is_atomic_when_writing_fails(
     def fail_write(*args: object, **kwargs: object) -> None:
         raise OSError("simulated write failure")
 
-    monkeypatch.setattr(zipfile.ZipFile, "write", fail_write)
+    monkeypatch.setattr(zipfile.ZipFile, "writestr", fail_write)
 
     with pytest.raises(ArchiveCreationError, match="simulated write failure"):
         ArchiveService().create_archive(

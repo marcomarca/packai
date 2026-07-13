@@ -9,12 +9,72 @@ from pathlib import Path
 from packai.application import PackService
 from packai.clipboard import copy_text_to_clipboard, copy_zip
 from packai.config import INCLUDE_ENV_EXAMPLE
-from packai.contracts import FileFinding, PackRequest, ProgressEvent
+from packai.contracts import FileFinding, PackMetrics, PackRequest, ProgressEvent
 from packai.errors import PackAIError, PackValidationError
 from packai.git import SubprocessGitContextProvider
 from packai.naming import build_default_zip_stem
 from packai.policy import GIT_CONTEXT_FILENAME, normalize_cli_exclude_paths, scan_text_for_secrets
 from packai.version import __version__
+
+
+def _non_negative_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("debe ser un número entero") from exc
+    if number < 0:
+        raise argparse.ArgumentTypeError("debe ser mayor o igual a cero")
+    return number
+
+
+def format_size(size_bytes: int) -> str:
+    """Render decimal units familiar to most CLI users."""
+    units = ("B", "KB", "MB", "GB")
+    value = float(size_bytes)
+    for unit in units:
+        if value < 1000 or unit == units[-1]:
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1000
+    return f"{size_bytes} B"
+
+
+def render_pack_metrics(metrics: PackMetrics) -> str:
+    """Render metrics without coupling their calculation to the console."""
+    labels = (
+        ("Archivos incluidos", f"{metrics.included_files:,}"),
+        ("Archivos de texto", f"{metrics.text_files:,}"),
+        ("Archivos binarios", f"{metrics.binary_files:,}"),
+        ("Tamaño sin comprimir", format_size(metrics.uncompressed_size)),
+        (
+            "Tamaño del ZIP",
+            format_size(metrics.zip_size) if metrics.zip_size is not None else "no disponible",
+        ),
+        ("Tokens estimados", f"{metrics.estimated_tokens:,}"),
+    )
+    width = max(len(label) for label, _ in labels)
+    lines = [f"{label + ':':<{width + 1}} {value:>12}" for label, value in labels]
+
+    if metrics.degraded:
+        lines.extend(("", f"⚠️  Estimación degradada: {metrics.tokenizer}"))
+    for warning in metrics.warnings:
+        lines.append(f"⚠️  {warning}")
+
+    if metrics.largest_token_files:
+        lines.extend(("", "Archivos con más tokens:"))
+        path_width = max(len(item.relative_path) for item in metrics.largest_token_files)
+        lines.extend(
+            f"  {item.relative_path:<{path_width}}  {item.token_count:>12,}"
+            for item in metrics.largest_token_files
+        )
+    return "\n".join(lines)
+
+
+def print_pack_metrics(metrics: PackMetrics | None) -> None:
+    print()
+    if metrics is None:
+        print("⚠️  Métricas no disponibles; el ZIP fue creado sin este reporte.")
+        return
+    print(render_pack_metrics(metrics))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,6 +124,13 @@ def build_parser() -> argparse.ArgumentParser:
         dest="include_env_example",
         default=INCLUDE_ENV_EXAMPLE,
         help="No incluir archivos .env.example.",
+    )
+    parser.add_argument(
+        "--token-top",
+        type=_non_negative_int,
+        default=3,
+        metavar="N",
+        help="Cantidad de archivos con más tokens a mostrar (0 oculta el ranking).",
     )
     parser.add_argument("folder", nargs="?", default=".", help="Carpeta a procesar.")
     return parser
@@ -168,10 +235,12 @@ def main(argv: list[str] | None = None) -> int:
                 force=args.force,
                 include_git_context=args.include_git_context,
                 exclude_paths=tuple(args.exclude_paths),
+                token_top=args.token_top,
             ),
             reporter=ConsoleReporter(),
         )
         print_findings(result.findings)
+        print_pack_metrics(result.metrics)
         copy_result = copy_zip(result.output_zip, args.copy)
         status_messages = {
             "file": "✅ ZIP copiado al portapapeles.",
