@@ -1,15 +1,53 @@
 [project]
 name = "pack-ai"
-version = "1.4.0"
+version = "2.0.0"
 description = "Package a project into a ZIP optimized for AI review while excluding common secrets and heavy files."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
+[project.scripts]
+packai = "packai.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [dependency-groups]
 dev = [
+    "mypy>=1.15",
     "pytest>=9.0.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.12",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "src"]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "."]
+extend-exclude = [".venv", "AI_SKILLS.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+"tests/test_pack_ai.py" = ["F401", "RUF059"]
+"pack_ai.py" = ["E402", "F401"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+files = ["src/packai"]
+warn_unreachable = true
+show_error_codes = true

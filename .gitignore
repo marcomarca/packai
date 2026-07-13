@@ -23,3 +23,10 @@ venv/
 *.pfx
 credentials.json
 service-account*.json
+
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/

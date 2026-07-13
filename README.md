@@ -1,138 +1,150 @@
-# 📦 Pack AI
+# Pack AI
 
-**Pack AI** es una herramienta de línea de comandos diseñada para empaquetar proyectos en un archivo ZIP optimizado para su revisión por Inteligencia Artificial (ChatGPT, Gemini, Claude, etc.), asegurando la exclusión de archivos pesados y reduciendo el riesgo de filtrar secretos.
+Pack AI empaqueta un proyecto en un ZIP orientado a revisión por herramientas de IA. Excluye archivos pesados, rutas configuradas y secretos detectables; también puede agregar el contexto del último commit confirmado.
 
-## ✨ Características principales
+## Estado de arquitectura
 
-- **🚀 Comando Global**: Instalación sencilla para usar `packai` desde cualquier carpeta.
-- **🛡️ Auditoría de Secretos**: Escaneo proactivo de claves API, tokens y credenciales con reportes detallados (tipo y número de línea).
-- **🌳 Visualización Estructurada**: Muestra un árbol real del contenido que se está empaquetando.
-- **📋 Copiado Automático**: Copia el archivo ZIP resultante directamente al portapapeles (en Windows).
-- **⚙️ Configuración Flexible**: Soporte para `.ignore2packai` (exclusión total).
-- **📄 Manejo Inteligente de Entornos**: Permite incluir archivos `.env.example`, `.env.sample` y `.env.template` de forma segura (siempre que no contengan secretos reales).
-- **🏷️ Versionado Automático**: El nombre del ZIP incluye el último commit de Git y su hash para facilitar el seguimiento de versiones.
+Desde la versión 2.0 el proyecto tiene dos superficies deliberadamente separadas:
 
-## 📋 Requisitos
+- `packai`: API estable y neutral respecto de la interfaz. Es la base para CLI, GUI, API HTTP u otras integraciones.
+- `pack_ai.py`: fachada de compatibilidad para imports y ejecución usados por versiones 1.x.
 
-Para usar esta herramienta necesitas:
+La lógica de empaquetado no imprime, no accede al portapapeles y no depende de `argparse`. Esas responsabilidades viven en adaptadores externos. El resultado se devuelve mediante contratos inmutables y el progreso se comunica mediante eventos tipados.
 
-- **Windows 10/11** y **PowerShell**.
-- **Python 3.12+**.
-- **[uv](https://astral.sh/uv/)** instalado y disponible en el PATH.
-- **Git** (opcional, para el nombrado automático basado en commits).
+## Requisitos
 
-Para instalar `packai` como un comando global en tu sistema:
+- Python 3.12 o superior.
+- `pyenv` para fijar el intérprete del proyecto.
+- `uv` para entorno, dependencias, lockfile y ejecución.
+- Git, opcional, para nombrado y contexto del último commit.
+- PowerShell o `pwsh`, solo para las funciones de portapapeles.
 
-1. Clona este repositorio.
-2. Abre una terminal en la carpeta del proyecto.
-3. Ejecuta el instalador automático:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\install.ps1
-   ```
-4. **Reinicia tu terminal**. ¡Listo! Ahora puedes usar `packai` en cualquier sitio.
+## Instalación de desarrollo
 
-### Desinstalación
-Si deseas eliminar el rastro de la herramienta y el comando global:
+```bash
+pyenv install -s 3.12.10
+pyenv local 3.12.10
+uv sync --locked
+uv run packai --version
+```
+
+En Windows se puede instalar el comando global del proyecto:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+El instalador sincroniza el lockfile y crea `%USERPROFILE%\bin\packai.cmd`. Para retirarlo:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-## 🛠️ Uso
+## Uso por CLI
 
 ```bash
 # Empaquetar la carpeta actual
 packai
 
-# Empaquetar una ruta específica
-packai C:\Ruta\De\Mi\Proyecto
+# Empaquetar una ruta específica sin usar el portapapeles
+packai C:\Ruta\Proyecto --copy none
 
-# El orden de las opciones es flexible
-packai --copy path --output mi_respaldo.zip .
-packai . --copy path --output mi_respaldo.zip
+# Elegir salida
+packai . --output ..\proyecto.zip --copy none
 
-# Copiar únicamente el contexto/diff del último commit al portapapeles
-packai . -c
+# Excluir carpetas relativas a la raíz; la opción es repetible
+packai . -e datos -e cache/tmp
 
-# Excluir una carpeta relativa al proyecto y todos sus hijos
-packai . -e "datos"
-
-# Excluir varias carpetas en caliente
-packai . -e "datos" -e "cache/tmp"
-```
-
-### Opciones disponibles
-
-| Opción | Valores | Descripción |
-|---|---|---|
-| `--version`, `-v` | | Muestra la versión actual del script. |
-| `--copy` | `file`, `path`, `none` | Qué se copia al portapapeles (por defecto: `file`). |
-| `--output` | `[ruta]` | Ruta del ZIP generado. Por defecto se nombra como `[Proyecto]-[Commit]-[Hash].zip`. |
-| `--force`, `-f` | (flag) | Forzar la inclusión de archivos con alertas de seguridad (falsos positivos), **excepto archivos .env y variantes** que siempre se excluyen. |
-| `--exclude`, `--exclude-path`, `-e`, `-E`, `-I` | `REL_DIR` | Excluye una carpeta relativa a la carpeta principal procesada y todos sus hijos. Se puede repetir. No acepta rutas absolutas ni rutas con `..`. |
-| `--commit-clipboard`, `-c` | (flag) | Copia al portapapeles el Markdown de `git--diff_last_commit.md` para el último commit confirmado, sin crear ZIP. |
-| `-g` | (flag) | Incluye `git--diff_last_commit.md` con el diff del último commit confirmado. |
-| `--no-env-example` | (flag) | Si se activa, excluye archivos `.env.example` y similares. |
-
-### Excluir carpetas desde CLI
-
-```bash
-packai . -e "datos"
-packai . -e "datos" -e "cache/tmp"
-packai C:\Ruta\De\Mi\Proyecto -e "datos"
-```
-
-La ruta de `-e` siempre se interpreta relativa a la carpeta principal que se está empaquetando. Por ejemplo, si ejecutas `packai . -e "datos"` desde la raíz de `miproyecto`, se excluye `miproyecto/datos/` y todo su contenido. No se excluye automáticamente otro directorio llamado `datos` en otra ubicación, como `src/datos/`.
-
-La herramienta valida que la ruta no sea absoluta, no use `..`, exista dentro del proyecto y sea una carpeta. Si usas `-g` o `-c`, la misma exclusión se aplica también al contexto Git generado.
-
-### Copiar solo el contexto del último commit
-
-```bash
-packai . -c
-```
-
-Genera el mismo contenido Markdown de `git--diff_last_commit.md`, pero no crea ZIP: solo copia ese Markdown al portapapeles.
-
-```bash
-packai . -cf
-```
-
-Combina `-c` con `-f`. Si el detector marca posibles secretos en el contexto Git, fuerza el copiado al portapapeles. Los archivos `.env` y variantes reales siguen excluidos del diff generado.
-
-### Incluir contexto del último commit en el ZIP
-
-```bash
+# Agregar el diff del último commit confirmado
 packai . -g
-```
 
-Incluye dentro del ZIP un archivo `git--diff_last_commit.md` con metadatos, archivos cambiados, estadísticas y diff del último commit confirmado (`HEAD`).
+# Copiar únicamente el contexto del último commit
+packai . -c
 
-```bash
+# Forzar inclusiones con alertas permitidas; los .env reales siguen bloqueados
 packai . -gf
 ```
 
-Combina `-g` con `-f`. Incluye el contexto Git y activa el modo force para inclusiones permitidas.
+### Opciones
 
-El contexto Git no incluye cambios sin commit.
+| Opción | Descripción |
+|---|---|
+| `--version`, `-v` | Muestra la versión. |
+| `--copy file\|path\|none` | Copia el ZIP, su ruta o nada. |
+| `--output RUTA` | Define el ZIP de salida. |
+| `--force`, `-f` | Incluye archivos con alertas, excepto `.env` y variantes reales. |
+| `--exclude`, `--exclude-path`, `-e`, `-E`, `-I` | Excluye una carpeta relativa existente; repetible. |
+| `--commit-clipboard`, `-c` | Copia el Markdown del último commit sin crear ZIP. |
+| `-g` | Incluye `git--diff_last_commit.md`. |
+| `--no-env-example` | Excluye `.env.example`, `.env.sample` y `.env.template`. |
 
-Los archivos `.env`, `.env.local`, `.env.production` y variantes reales nunca se incluyen, ni en el ZIP normal ni dentro de `git--diff_last_commit.md`, incluso usando `-f`. Los ejemplos `.env.example`, `.env.sample` y `.env.template` pueden incluirse si no contienen secretos; `--no-env-example` los excluye.
+Las exclusiones de CLI no aceptan rutas absolutas, `~`, `..`, archivos ni rutas fuera del proyecto. Se normalizan una vez en la capa de aplicación y se aplican tanto al ZIP como al contexto Git.
 
-## ⚙️ Configuración Personalizada
+## API para futuras interfaces
 
-- **`.ignore2packai`**: Permite definir patrones de exclusión simples (tipo `fnmatch`). Lo que coincida no entrará en el ZIP.
-- **`config_pack_ai.py`**: Archivo central para cambiar comportamientos por defecto del script.
+Una GUI debe depender de `PackService`, no del CLI ni de `pack_ai.py`:
 
-## 🛡️ Seguridad y Limitaciones
+```python
+from pathlib import Path
 
-**Pack AI** reduce el riesgo, pero **no garantiza una detección del 100%**. 
-
-- El escaneo se basa en patrones Regex. No detecta secretos en formatos desconocidos.
-- Siempre revisa el reporte de "Excluidos" al finalizar el empaquetado.
-- Los archivos binarios, carpetas comunes (`node_modules`, `.git`, etc.) y carpetas ocultas genéricas (`.tmp/`, `.uv-python/`, etc.) se ignoran por defecto para mantener el ZIP ligero. Esta regla aplica a carpetas, no a archivos con punto en el nombre.
-
----
-Desarrollado para optimizar el flujo de trabajo con IAs de código.
+from packai import PackRequest, PackService, ProgressEvent
 
 
-[] tiene que optimizarse para que acepte ignorar rutas de folders de un proyecto especifico facilmente desde el cli
-# packai
+def on_progress(event: ProgressEvent) -> None:
+    # Adaptar a una barra, árbol, log o bus de eventos de la interfaz.
+    print(event.kind, event.relative_path)
+
+
+result = PackService().pack(
+    PackRequest(
+        root=Path("mi-proyecto"),
+        output_zip=Path("mi-proyecto.zip"),
+        exclude_paths=("cache",),
+        include_git_context=True,
+    ),
+    reporter=on_progress,
+)
+
+print(result.output_zip, result.included_count, result.findings)
+```
+
+Contratos públicos:
+
+- `PackRequest`: entrada validada del caso de uso.
+- `PackResult`: salida inmutable con conteos, archivos incluidos y hallazgos.
+- `ProgressEvent`: evento neutral para CLI, GUI o telemetría.
+- `GitContextProvider`: puerto sustituible para Git real o dobles de prueba.
+- `PackValidationError` y `ArchiveCreationError`: fallos esperados traducibles por cada interfaz.
+
+## Política de seguridad
+
+- `.env`, `.env.*` y variantes reales se excluyen incluso con `--force`.
+- Los archivos de ejemplo de entorno se admiten solo si están habilitados y no contienen secretos detectados.
+- Los hallazgos se enmascaran antes de formar parte de resultados o reportes.
+- Los enlaces simbólicos no se siguen ni se agregan al ZIP.
+- El ZIP se construye en un archivo temporal y reemplaza la salida de forma atómica únicamente cuando termina correctamente. Un fallo no destruye un ZIP anterior válido.
+- La detección por expresiones regulares reduce riesgo, pero no garantiza ausencia de secretos. El ZIP debe revisarse antes de compartirlo.
+
+## Configuración
+
+- `.ignore2packai`: patrones `fnmatch`, uno por línea; se omiten líneas vacías y comentarios con `#`.
+- `config_pack_ai.py`: conserva la opción `INCLUDE_ENV_EXAMPLE` por compatibilidad.
+- `.python-version`, `pyproject.toml` y `uv.lock`: definen el entorno reproducible.
+
+## Calidad
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy src/packai
+uv run pytest
+uv run pytest --cov=packai --cov-fail-under=70
+```
+
+La estrategia y las decisiones durables están en:
+
+- `docs/architecture.md`
+- `docs/testing-strategy.md`
+- `docs/adr/0001-stable-application-contracts.md`
+- `CONTEXT.md`
+- `AI_SKILLS.md`

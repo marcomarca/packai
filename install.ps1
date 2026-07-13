@@ -13,6 +13,13 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 
 Write-Host "🚀 Iniciando instalación de Pack AI..." -ForegroundColor Cyan
 
+# Sincronizar exactamente el entorno bloqueado antes de crear el comando
+uv sync --project "$ProjectRoot" --locked
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ No se pudo sincronizar el proyecto con uv.lock." -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+
 # 1. Crear carpeta bin si no existe
 if (!(Test-Path $BinDir)) {
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
@@ -24,9 +31,9 @@ $CmdContent = @"
 @echo off
 set "PackAiProject=$ProjectRoot"
 if "%~1" == "" (
-    uv run --project "%PackAiProject%" python "%PackAiProject%\pack_ai.py" .
+    uv run --project "%PackAiProject%" packai .
 ) else (
-    uv run --project "%PackAiProject%" python "%PackAiProject%\pack_ai.py" %*
+    uv run --project "%PackAiProject%" packai %*
 )
 "@
 
