@@ -1,24 +1,27 @@
 # Pack AI
 
-Pack AI empaqueta un proyecto en un ZIP orientado a revisión por herramientas de IA. Excluye rutas irrelevantes, ejecutables, binarios desconocidos y secretos detectables; puede agregar el contexto del último commit y reporta el tamaño y los tokens estimados del contenido enviado.
+Pack AI empaqueta un proyecto en un ZIP orientado a revisión por herramientas de IA. Excluye rutas irrelevantes, ejecutables, binarios desconocidos y secretos detectables; puede agregar el contexto del último commit y reporta tamaño, archivos y tokens estimados.
 
 ## Arquitectura
 
-El proyecto ofrece dos superficies:
+El proyecto ofrece tres superficies sobre el mismo núcleo:
 
-- `packai`: API estable y neutral respecto de la interfaz. Es la base para CLI, GUI, API HTTP u otras integraciones.
-- `pack_ai.py`: fachada de compatibilidad para imports y ejecución usados por versiones 1.x.
+- CLI tradicional mediante `packai .`.
+- GUI local mediante `packai gui .`.
+- API Python mediante `PackService.preview` y `PackService.pack`.
 
-La lógica de empaquetado no imprime, no accede al portapapeles y no depende de `argparse`. `PackService.preview` calcula una instantánea sin comprimir; `PackService.pack` analiza y escribe exactamente los mismos bytes, y devuelve contratos inmutables aptos para una futura GUI.
+`pack_ai.py` conserva la fachada de compatibilidad usada por versiones 1.x. La lógica de empaquetado no depende de `argparse`, PyWebView, React ni el portapapeles. CLI y GUI traducen sus opciones al mismo `PackRequest`.
 
 ## Requisitos
 
 - Python 3.12 o superior.
 - `pyenv` para fijar el intérprete.
 - `uv` para dependencias, entorno y lockfile.
-- `tiktoken` para el conteo principal con `o200k_base`.
 - Git, opcional, para nombrado y contexto del último commit.
-- PowerShell o `pwsh`, solo para funciones de portapapeles.
+- PowerShell o `pwsh`, solo para las funciones de portapapeles.
+- Para la GUI: PyWebView y watchdog mediante el extra opcional `gui`; en Linux ese extra instala además el backend Qt.
+
+El vocabulario `o200k_base` se distribuye dentro del paquete y se verifica mediante SHA-256. El conteo preciso no necesita red ni una caché previa de `tiktoken`.
 
 Este paquete no incluye `uv.lock`. Después de integrar los cambios en un repositorio con lockfile propio:
 
@@ -26,30 +29,72 @@ Este paquete no incluye `uv.lock`. Después de integrar los cambios en un reposi
 pyenv install -s 3.12.10
 pyenv local 3.12.10
 uv lock
-uv sync --locked
+uv sync --locked --extra gui
 uv run packai --version
 ```
+
+Para instalar solo el CLI:
+
+```bash
+uv sync --locked
+```
+
+## Interfaz gráfica
+
+```bash
+# Abrir la carpeta actual
+uv run packai gui .
+
+# Abrir otra carpeta con configuración inicial
+uv run packai gui C:\Ruta\Proyecto -e generated -e cache --force -g --token-top 10
+```
+
+La GUI incluye:
+
+- árbol jerárquico exclusivo de carpetas;
+- casillas seleccionadas, desmarcadas e indeterminadas;
+- carpetas bloqueadas visibles pero deshabilitadas;
+- métricas reactivas de tokens, tamaño, texto, binarios y ranking;
+- opciones `Force`, contexto Git, `.env.example`, ranking y portapapeles;
+- reescaneo por eventos con debounce y sondeo de baja frecuencia como fallback;
+- reescaneo obligatorio antes de cada generación;
+- comandos reproducibles para empaquetar directamente o reabrir la selección;
+- botón para generar de nuevo el ZIP con el estado actual del proyecto.
+
+La selección existe solo mientras la ventana está abierta. La GUI no crea configuración local ni permite cambiar la ruta de salida. El ZIP usa el mismo nombre automático que el CLI.
+
+### Fallos de instalación o backend gráfico
+
+Si PyWebView no está instalado, `packai gui` muestra los comandos necesarios sin afectar al CLI:
+
+```bash
+uv lock
+uv sync --locked --extra gui
+uv run packai gui .
+```
+
+En Windows, si las dependencias están instaladas pero la ventana no abre, ejecuta `winget install -e --id Microsoft.EdgeWebView2Runtime`; si `winget` falla, instala o repara **Microsoft Edge WebView2 Evergreen Runtime** desde Microsoft. En Linux, el extra `gui` instala el backend Qt y requiere una sesión gráfica X11 o Wayland activa. El mensaje de error conserva siempre el comando CLI tradicional como alternativa.
 
 ## Uso por CLI
 
 ```bash
 # Empaquetar la carpeta actual
-packai
+uv run packai .
 
 # Empaquetar sin usar el portapapeles
-packai C:\Ruta\Proyecto --copy none
+uv run packai C:\Ruta\Proyecto --copy none
 
 # Mostrar los 10 archivos con más tokens
-packai . --token-top 10
+uv run packai . --token-top 10
 
 # Ocultar el ranking, conservando el total
-packai . --token-top 0
+uv run packai . --token-top 0
 
 # Elegir salida y exclusiones relativas repetibles
-packai . --output ..\proyecto.zip -e datos -e cache/tmp --copy none
+uv run packai . --output ..\proyecto.zip -e datos -e cache/tmp --copy none
 
 # Agregar el diff del último commit confirmado
-packai . -g
+uv run packai . -g
 ```
 
 Salida de referencia:
@@ -68,21 +113,20 @@ Archivos con más tokens:
   docs/api-reference.md          48,102
 ```
 
-Si `tiktoken` no puede cargarse, el ZIP se crea igualmente y el CLI marca una estimación degradada basada en bytes UTF-8.
+Si `tiktoken` o el vocabulario local no pueden cargarse, el ZIP se crea igualmente y la salida marca una estimación degradada basada en bytes UTF-8.
 
-### Opciones
+### Opciones compartidas relevantes
 
 | Opción | Descripción |
 |---|---|
-| `--version`, `-v` | Muestra la versión. |
 | `--copy file\|path\|none` | Copia el ZIP, su ruta o nada. |
-| `--output RUTA` | Define el ZIP de salida. |
 | `--force`, `-f` | Incluye archivos con alertas, excepto `.env` y ejecutables/binarios no permitidos. |
 | `--exclude`, `--exclude-path`, `-e`, `-E`, `-I` | Excluye una carpeta relativa existente; repetible. |
 | `--token-top N` | Cantidad de archivos con más tokens; `0` oculta el ranking. |
-| `--commit-clipboard`, `-c` | Copia el Markdown del último commit sin crear ZIP. |
 | `-g` | Incluye `git--diff_last_commit.md` y sus tokens. |
 | `--no-env-example` | Excluye `.env.example`, `.env.sample` y `.env.template`. |
+
+El CLI tradicional también admite `--output` y `--commit-clipboard`. La GUI no permite cambiar la salida y no ofrece el modo exclusivo de copiar contexto Git.
 
 ## Texto, imágenes, PDF y ejecutables
 
@@ -95,9 +139,7 @@ Si `tiktoken` no puede cargarse, el ZIP se crea igualmente y el CLI marca una es
 
 El análisis nunca recodifica el contenido: el ZIP recibe los bytes originales.
 
-## API para futuras interfaces
-
-### Preview sin crear ZIP
+## API Python
 
 ```python
 from pathlib import Path
@@ -114,19 +156,11 @@ request = PackRequest(
 preview = PackService().preview(request)
 print(preview.metrics)
 assert not request.output_zip.exists()
-```
 
-`preview.metrics.zip_size` es `None`; el resto describe la instantánea precompresión.
-
-### Creación final
-
-```python
 result = PackService().pack(request)
-
 if result.metrics is not None:
     print(result.metrics.estimated_tokens)
     print(result.metrics.zip_size)
-    print(result.metrics.largest_token_files)
 ```
 
 Contratos públicos relevantes:
@@ -146,10 +180,11 @@ Un fallo total del análisis deja `metrics=None`, emite una advertencia y no inv
 - `.env`, `.env.*` y variantes reales se excluyen incluso con `--force`.
 - Los hallazgos se enmascaran antes de formar parte de resultados.
 - Los enlaces simbólicos no se siguen.
-- Las firmas ejecutables se bloquean incluso si el archivo usa una extensión de imagen.
-- El ZIP se construye en un temporal y reemplaza la salida únicamente después de cerrarse correctamente.
+- Las firmas ejecutables se bloquean aunque el archivo use una extensión de imagen.
+- El ZIP se construye en un temporal y reemplaza la salida solo después de cerrarse correctamente.
 - PDF e imágenes no se inspeccionan internamente para secretos; deben revisarse antes de compartir.
 - La detección por regex reduce riesgo, pero no garantiza ausencia de secretos.
+- Los recursos HTML, CSS, JavaScript y React de la GUI son locales; no existe CDN ni servidor HTTP.
 
 ## Calidad
 
@@ -167,5 +202,6 @@ Decisiones y contratos:
 - `docs/testing-strategy.md`
 - `docs/adr/0001-stable-application-contracts.md`
 - `docs/adr/0002-precompression-token-metrics.md`
+- `docs/adr/0003-local-pywebview-gui.md`
 - `CONTEXT.md`
 - `AI_SKILLS.md`

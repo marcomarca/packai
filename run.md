@@ -1,13 +1,19 @@
 # Comandos recomendados
 
-> Este ZIP no incluye ni modifica `uv.lock`. `pyproject.toml` añade `tiktoken`; actualiza tu propio lockfile después de integrar los cambios.
+> Este ZIP no incluye ni modifica `uv.lock`. Integra los archivos y actualiza tu lockfile propio.
 
-## Resolver la nueva dependencia en tu lockfile
+## Resolver dependencias
 
 ```bash
 pyenv install -s 3.12.10
 pyenv local 3.12.10
 uv lock
+uv sync --locked --extra gui
+```
+
+Solo CLI, sin dependencias gráficas:
+
+```bash
 uv sync --locked
 ```
 
@@ -24,29 +30,65 @@ uv run pytest --cov=packai --cov-fail-under=70
 ## Pruebas dirigidas
 
 ```bash
-uv run pytest tests/unit/test_metrics.py
-uv run pytest tests/unit
+uv run pytest tests/unit/test_gui_api.py
+uv run pytest tests/unit/test_gui_cli.py
+uv run pytest tests/unit/test_gui_commands.py
+uv run pytest tests/unit/test_gui_launcher.py
+uv run pytest tests/unit/test_gui_tree.py
+uv run pytest tests/unit/test_gui_watcher.py
+uv run pytest tests/unit/test_tokenization.py
 uv run pytest tests/contract
 uv run pytest tests/test_pack_ai.py
 ```
 
-## Verificar tokenizador principal
+## Verificar tokenizador offline
 
 ```bash
-uv run python -c "from packai.tokenization import build_default_token_estimator; e=build_default_token_estimator(); r=e.estimate('hola mundo'); print(r)"
+uv run python -c "from packai.tokenization import build_default_token_estimator; r=build_default_token_estimator().estimate('hola mundo'); print(r)"
 ```
 
-El resultado normal debe indicar `tiktoken:o200k_base` y `degraded=False`. Si aparece `heuristic:utf8-bytes/4`, el ZIP seguirá funcionando, pero el entorno no pudo cargar `tiktoken`.
+El resultado normal debe indicar `tiktoken:o200k_base` y `degraded=False`. El conteo preciso debe funcionar sin acceso a internet. Si aparece `heuristic:utf8-bytes/4`, el ZIP seguirá funcionando, pero el entorno no pudo cargar o verificar el tokenizador exacto.
 
-## Smoke test de métricas y CLI
+## Smoke test del CLI
 
 ```bash
 uv run packai --version
 uv run packai . --copy none --token-top 10 --output ../pack-ai-smoke.zip
 ```
 
-## Preview para una futura GUI
+## Smoke test de la GUI
 
 ```bash
-uv run python -c "from pathlib import Path; from packai import PackRequest, PackService; p=PackService().preview(PackRequest(root=Path('.'), output_zip=Path('../preview.zip'))); print(p.metrics); assert not Path('../preview.zip').exists()"
+uv run packai gui --help
+uv run packai gui .
+```
+
+Prueba manual mínima:
+
+1. Desmarca una carpeta y comprueba el estado indeterminado de su ancestro.
+2. Verifica que las métricas se recalculen.
+3. Activa y desactiva `Force` y contexto Git.
+4. Crea o modifica un archivo y comprueba la actualización por eventos o sondeo.
+5. Pulsa `Generar ZIP` dos veces después de modificar el proyecto.
+6. Copia ambos comandos reproducibles y comprueba su sintaxis.
+
+En Windows, si la ventana no inicia aun con el extra instalado:
+
+```powershell
+winget install -e --id Microsoft.EdgeWebView2Runtime
+```
+
+Si `winget` falla, instala o repara Microsoft Edge WebView2 Evergreen Runtime desde Microsoft. En Linux, el extra `gui` instala Qt; ejecuta la prueba dentro de una sesión gráfica X11 o Wayland.
+
+## Instalación Windows del proyecto
+
+```powershell
+.\install.ps1
+packai gui .
+```
+
+Para instalar únicamente el CLI:
+
+```powershell
+.\install.ps1 -NoGui
 ```

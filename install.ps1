@@ -1,5 +1,9 @@
 # install.ps1 - Instalador automático para Pack AI en Windows
 
+param(
+    [switch]$NoGui
+)
+
 $ProjectRoot = $PSScriptRoot
 $BinDir = "$env:USERPROFILE\bin"
 $CmdFile = Join-Path $BinDir "packai.cmd"
@@ -13,10 +17,17 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 
 Write-Host "🚀 Iniciando instalación de Pack AI..." -ForegroundColor Cyan
 
-# Sincronizar exactamente el entorno bloqueado antes de crear el comando
-uv sync --project "$ProjectRoot" --locked
+# Sincronizar exactamente el lockfile del repositorio. La GUI se instala por
+# defecto; usa -NoGui en equipos que solo necesiten el CLI.
+$SyncArguments = @("sync", "--project", $ProjectRoot, "--locked")
+if (-not $NoGui) {
+    $SyncArguments += @("--extra", "gui")
+}
+
+& uv @SyncArguments
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ No se pudo sincronizar el proyecto con uv.lock." -ForegroundColor Red
+    Write-Host "💡 Después de integrar cambios en pyproject.toml ejecuta primero: uv lock" -ForegroundColor Yellow
     exit $LASTEXITCODE
 }
 
@@ -50,4 +61,9 @@ if (($UserPath -split ";") -notcontains $BinDir) {
     Write-Host "ℹ️ La carpeta ya estaba en el PATH."
 }
 
+if ($NoGui) {
+    Write-Host "ℹ️ Instalación CLI completada sin dependencias gráficas."
+} else {
+    Write-Host "ℹ️ Interfaz gráfica disponible con: packai gui ."
+}
 Write-Host "✨ Instalación completada con éxito!" -ForegroundColor Cyan

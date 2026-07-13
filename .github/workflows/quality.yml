@@ -20,8 +20,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync --locked
+      - run: uv sync --locked --extra gui
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run mypy src/packai
       - run: uv run pytest --cov=packai --cov-fail-under=70
+      - run: uv build --wheel

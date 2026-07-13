@@ -136,6 +136,90 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_gui_parser() -> argparse.ArgumentParser:
+    """Build the optional GUI command parser without changing legacy CLI flags."""
+    parser = argparse.ArgumentParser(
+        prog="packai gui",
+        description="Abre una interfaz gráfica para seleccionar carpetas y crear el ZIP.",
+    )
+    parser.add_argument("--version", "-v", action="version", version=f"Pack AI {__version__}")
+    parser.add_argument(
+        "--copy",
+        choices=["file", "path", "none"],
+        default="file",
+        help="Acción de portapapeles después de generar.",
+    )
+    parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Incluir archivos con alertas de secretos (excepto exclusiones estrictas).",
+    )
+    parser.add_argument(
+        "-g",
+        action="store_true",
+        dest="include_git_context",
+        help=f"Incluye {GIT_CONTEXT_FILENAME} con el diff del último commit confirmado.",
+    )
+    parser.add_argument(
+        "--exclude",
+        "--exclude-path",
+        "-e",
+        "-E",
+        "-I",
+        action="append",
+        default=[],
+        dest="exclude_paths",
+        metavar="REL_DIR",
+        help="Inicia la GUI con una carpeta relativa excluida. Repetible.",
+    )
+    parser.add_argument(
+        "--no-env-example",
+        action="store_false",
+        dest="include_env_example",
+        default=INCLUDE_ENV_EXAMPLE,
+        help="No incluir archivos .env.example.",
+    )
+    parser.add_argument(
+        "--token-top",
+        type=_non_negative_int,
+        default=3,
+        metavar="N",
+        help="Cantidad de archivos con más tokens a mostrar.",
+    )
+    parser.add_argument("folder", nargs="?", default=".", help="Carpeta a abrir.")
+    return parser
+
+
+def _main_gui(argv: list[str]) -> int:
+    args = build_gui_parser().parse_args(argv)
+    root = Path(args.folder).expanduser().resolve()
+    try:
+        if not root.exists():
+            raise PackValidationError(f"La ruta no existe: {root}")
+        if not root.is_dir():
+            raise PackValidationError(f"La ruta no es una carpeta: {root}")
+        exclude_paths = tuple(normalize_cli_exclude_paths(root, args.exclude_paths))
+    except PackAIError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 2
+
+    from packai.gui.contracts import GuiLaunchOptions
+    from packai.gui.launcher import launch_gui
+
+    return launch_gui(
+        GuiLaunchOptions(
+            root=root,
+            exclude_paths=exclude_paths,
+            force=args.force,
+            include_git_context=args.include_git_context,
+            include_env_example=args.include_env_example,
+            token_top=args.token_top,
+            copy_mode=args.copy,
+        )
+    )
+
+
 class ConsoleReporter:
     """Render progress events without leaking console concerns into the service."""
 
@@ -211,7 +295,11 @@ def _copy_git_context(root: Path, *, force: bool, exclude_paths: list[str]) -> i
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    if raw_argv and raw_argv[0] == "gui":
+        return _main_gui(raw_argv[1:])
+
+    args = build_parser().parse_args(raw_argv)
     root = Path(args.folder).expanduser().resolve()
 
     try:

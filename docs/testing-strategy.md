@@ -20,7 +20,11 @@
 - exclusión de ejecutables incluso con extensión engañosa;
 - preservación de bytes en codificaciones heredadas;
 - fallback heurístico del tokenizador;
-- creación del ZIP aunque falle completamente el análisis de métricas.
+- creación del ZIP aunque falle completamente el análisis de métricas;
+- árbol de carpetas con nodos bloqueados visibles y no recorridos;
+- traducción de exclusiones y opciones entre GUI, `PackRequest` y comandos reproducibles;
+- reescaneo antes de generar y descarte de exclusiones que ya no existen;
+- despacho de `packai gui` sin modificar el parser heredado.
 
 Los estimadores falsos hacen que las pruebas de dominio sean deterministas y no dependan de una versión concreta de `tiktoken`.
 
@@ -30,7 +34,7 @@ Los estimadores falsos hacen que las pruebas de dominio sean deterministas y no 
 
 ### Integración
 
-Las pruebas abren ZIP reales y comparan bytes. Git y portapapeles se aíslan porque dependen del sistema. Un smoke test con `tiktoken` instalado debe comprobar que el método informado sea `tiktoken:o200k_base` y no degradado.
+Las pruebas abren ZIP reales y comparan bytes. Git y portapapeles se aíslan porque dependen del sistema. Un smoke test con `tiktoken` instalado debe comprobar, sin acceso de red, que el método informado sea `tiktoken:o200k_base` y no degradado. También se verifica que un vocabulario corrupto active el fallback.
 
 ## Gate local y CI
 
@@ -51,3 +55,16 @@ El umbral mínimo es 70%. No debe reducirse para ocultar una regresión.
 - Cambio de contrato público: ADR y prueba de contrato.
 - Corrección de bug: reproducción mínima y prueba de regresión.
 - Nueva GUI: debe consumir `preview`/`pack`; no debe duplicar clasificación, métricas ni tokenización.
+- Cambio en selección jerárquica: prueba sobre exclusiones mínimas y comandos reproducibles.
+- Cambio en monitor: la corrección debe seguir dependiendo del reescaneo previo a `pack`, no de la entrega perfecta de eventos.
+
+### GUI manual
+
+La validación visual requiere un equipo con backend gráfico:
+
+```bash
+uv sync --locked --extra gui
+uv run packai gui .
+```
+
+Comprobar: estados triestado, nodos bloqueados, actualización tras crear/eliminar carpetas, Force, contexto Git, copia de comandos y dos generaciones consecutivas después de modificar archivos. La CI no debe intentar abrir una ventana en un runner sin escritorio.

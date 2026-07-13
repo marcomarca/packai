@@ -27,7 +27,8 @@ La versión 2.1 añade:
 - tokens estimados sobre contenido textual;
 - ranking configurable mediante `token_top` y `--token-top`;
 - preview sin compresión;
-- `tiktoken:o200k_base` como método principal;
+- `tiktoken:o200k_base` como método principal con vocabulario local verificado;
+- inicialización exacta sin red ni caché previa;
 - fallback degradado por bytes UTF-8;
 - imágenes raster y PDF permitidos por firma, sin aporte de tokens;
 - exclusión explícita de ejecutables y binarios desconocidos.
@@ -54,12 +55,50 @@ La versión 2.1 añade:
 - La detección de secretos continúa basada en expresiones regulares.
 - Una preview puede quedar obsoleta si los archivos cambian antes del pack; el pack siempre genera su propia instantánea actual.
 
-## Verificación de esta entrega
+## Verificación histórica de la iteración 2.1
 
 - Ruff format/check: correcto.
 - mypy estricto: correcto en 16 módulos.
 - Pytest: 59 pruebas aprobadas.
 - Cobertura: 75.54%, con gate mínimo de 70%.
 - Smoke test: texto, PNG y PDF incluidos; ejecutable excluido; tamaños del reporte coinciden con el ZIP.
-- El entorno aislado no tenía `tiktoken` instalado, por lo que el smoke test ejercitó el fallback. El adapter principal queda cubierto por contrato e import dinámico y debe verificarse tras actualizar el lockfile propio.
-- `uv.lock` no fue creado, modificado ni incluido.
+- El vocabulario local `o200k_base` fue validado mediante SHA-256 y el smoke test exacto devolvió `degraded=False` sin acceso de red.
+- `uv.lock` no forma parte del artefacto entregado.
+
+## Mejora de interfaz gráfica
+
+La versión 2.2 añade una superficie PyWebView opcional sin desplazar al CLI:
+
+- `packai gui .` con los mismos flags iniciales relevantes;
+- árbol exclusivo de carpetas con estados marcado, desmarcado, indeterminado y bloqueado;
+- carpetas ignoradas visibles como hojas deshabilitadas;
+- selección efímera traducida a exclusiones relativas mínimas;
+- preview reactiva de tokens, tamaños, archivos y hallazgos;
+- generación repetible que reescanea antes de escribir;
+- monitor de watchdog con debounce y sondeo de baja frecuencia como fallback;
+- comandos reproducibles para pack directo y reapertura de la GUI;
+- React 18.3.1 vendorizado con licencia y hashes, sin CDN ni servidor local;
+- diagnóstico accionable para dependencias opcionales, WebView2 y backends Linux/macOS.
+
+La GUI no persiste configuración, no elige una ruta de salida y no contiene reglas de dominio propias. `GuiBridge` traduce datos serializables y delega en `PackService`.
+
+## Riesgos residuales de la GUI
+
+- La entrega visual final depende del motor nativo de cada sistema operativo; debe validarse en Windows con WebView2.
+- Watchdog puede producir ráfagas de eventos en repositorios activos. El debounce reduce previews repetidas y la corrección no depende del watcher.
+- Una preview en curso no se cancela a mitad del análisis; respuestas obsoletas se descartan en React. El supuesto de proyectos menores a 100 MB mantiene acotado el costo.
+- Reincorporar una rama bajo un ancestro excluido puede expandirse a varias exclusiones hermanas porque el contrato del CLI solo expresa carpetas excluidas.
+- React se distribuye como recurso estático y requiere una actualización consciente de versión, licencia y hashes.
+
+## Verificación actualizada de esta entrega
+
+- Ruff format/check: correcto en el proyecto completo.
+- mypy estricto: sin errores en 25 módulos de `src/packai`.
+- Pytest: 78 pruebas aprobadas.
+- Cobertura: 78.87%, con gate mínimo de 70%.
+- Tokenizador: vocabulario `o200k_base` local, 199,998 entradas y SHA-256 verificado.
+- Wheel: construido desde una copia aislada y revisado para comprobar recursos de GUI y tokenización.
+- Recursos: HTML, CSS, JavaScript, React, licencias y vocabulario presentes dentro del wheel.
+- CLI: versión, parser heredado y ayuda de `packai gui` comprobados.
+- No se abrió una ventana nativa en este entorno Linux sin escritorio.
+- `uv.lock` no se incluye en el artefacto entregado.

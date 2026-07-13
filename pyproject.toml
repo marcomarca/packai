@@ -1,11 +1,18 @@
 [project]
 name = "pack-ai"
-version = "2.1.0"
+version = "2.2.0"
 description = "Package a project into a ZIP optimized for AI review while excluding common secrets and heavy files."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "tiktoken",
+    "tiktoken>=0.7,<1",
+]
+
+[project.optional-dependencies]
+gui = [
+    "pywebview>=6.2,<7; sys_platform != 'linux'",
+    "pywebview[qt]>=6.2,<7; sys_platform == 'linux'",
+    "watchdog>=6,<7",
 ]
 
 [project.scripts]
@@ -25,6 +32,16 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"packai.data" = ["*.tiktoken", "*.txt"]
+"packai.gui.resources" = [
+    "*.html",
+    "*.css",
+    "*.js",
+    "vendor/*.js",
+    "vendor/*.txt",
+]
 
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]

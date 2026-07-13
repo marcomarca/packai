@@ -24,7 +24,7 @@ Cada operación construye un `ArchivePlan` efímero con los bytes exactos de tod
 
 `PackService.preview` crea y analiza el plan sin escribir un ZIP. `PackService.pack` vuelve a construir una instantánea actual, calcula las métricas, escribe esos mismos bytes de forma atómica y completa `zip_size` a partir del archivo final.
 
-El conteo principal usa `tiktoken` con `o200k_base`. Si la dependencia o el tokenizador fallan, se degrada por archivo a `ceil(bytes_utf8 / 4)` y el contrato marca `degraded=True`.
+El conteo principal usa `tiktoken` con `o200k_base`. El vocabulario se distribuye como recurso local, se valida por SHA-256 y no requiere red ni caché previa. Si la dependencia, el recurso o el tokenizador fallan, se degrada por archivo a `ceil(bytes_utf8 / 4)` y el contrato marca `degraded=True`.
 
 Las imágenes raster y los PDF se incluyen como binarios únicamente si su firma coincide con una lista permitida. No aportan tokens. Ejecutables, binarios desconocidos y formatos pesados ya excluidos permanecen fuera del ZIP.
 
