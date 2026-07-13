@@ -122,7 +122,7 @@ Si `tiktoken` o el vocabulario local no pueden cargarse, el ZIP se crea igualmen
 | Opción | Descripción |
 |---|---|
 | `--copy file\|path\|none` | Copia el ZIP, su ruta o nada. |
-| `--force`, `-f` | Incluye archivos con alertas, excepto `.env` y ejecutables/binarios no permitidos. |
+| `--force`, `-f` | Incluye archivos con alertas, excepto exclusiones estrictas y ejecutables/binarios no permitidos. |
 | `--exclude`, `--exclude-path`, `-e`, `-E`, `-I` | Excluye una carpeta relativa existente; repetible. |
 | `--token-top N` | Cantidad de archivos con más tokens; `0` oculta el ranking. |
 | `-g` | Incluye `git--diff_last_commit.md` y sus tokens. |
@@ -179,7 +179,7 @@ Un fallo total del análisis deja `metrics=None`, emite una advertencia y no inv
 
 ## Seguridad y consistencia
 
-- `.env`, `.env.*` y variantes reales se excluyen incluso con `--force`.
+- `.env`, `.env.*`, `bun.lock` y demás exclusiones estrictas se omiten incluso con `--force`.
 - Los hallazgos se enmascaran antes de formar parte de resultados.
 - Los enlaces simbólicos no se siguen.
 - Las firmas ejecutables se bloquean aunque el archivo use una extensión de imagen.

@@ -91,7 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         "-f",
         action="store_true",
-        help="Forzar inclusión de archivos con alertas (excepto .env).",
+        help="Forzar inclusión de archivos con alertas (excepto exclusiones estrictas).",
     )
     parser.add_argument(
         "--commit-clipboard",

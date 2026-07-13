@@ -68,12 +68,14 @@ DEFAULT_IGNORE = [
     "*.obj",
 ]
 
-# Archivos sensibles que se excluyen siempre por nombre
+# Archivos que se excluyen siempre por nombre, incluso con --force.
+# Añade aquí cualquier archivo que deba quedar bloqueado globalmente.
 STRICT_EXCLUDE_PATTERNS = [
     ".env",
     ".env.*",
     "**/.env",
     "**/.env.*",
+    "bun.lock",
 ]
 
 SECRET_FILE_PATTERNS = [
