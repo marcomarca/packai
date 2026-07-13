@@ -76,6 +76,7 @@ STRICT_EXCLUDE_PATTERNS = [
     "**/.env",
     "**/.env.*",
     "bun.lock",
+    "uv.lock",
 ]
 
 SECRET_FILE_PATTERNS = [

@@ -179,7 +179,7 @@ Un fallo total del análisis deja `metrics=None`, emite una advertencia y no inv
 
 ## Seguridad y consistencia
 
-- `.env`, `.env.*`, `bun.lock` y demás exclusiones estrictas se omiten incluso con `--force`.
+- `.env`, `.env.*`, `bun.lock`, `uv.lock` y demás exclusiones estrictas se omiten incluso con `--force`.
 - Los hallazgos se enmascaran antes de formar parte de resultados.
 - Los enlaces simbólicos no se siguen.
 - Las firmas ejecutables se bloquean aunque el archivo use una extensión de imagen.

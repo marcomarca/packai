@@ -252,6 +252,25 @@ def test_bun_lock_excluded_even_with_force(temp_project):
         assert "frontend/bun.lock" not in names
 
 
+def test_uv_lock_excluded_even_with_force(temp_project):
+    """Verifica que uv.lock se excluya siempre, también en subdirectorios."""
+    (temp_project / "uv.lock").write_text("root lock", encoding="utf-8")
+    nested = temp_project / "backend"
+    nested.mkdir()
+    (nested / "uv.lock").write_text("nested lock", encoding="utf-8")
+
+    zip_path = temp_project.parent / "test_uv_lock.zip"
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=True)
+
+    assert incl == 0
+    assert ign >= 2
+    assert findings == []
+    with zipfile.ZipFile(zip_path, "r") as z:
+        names = z.namelist()
+        assert "uv.lock" not in names
+        assert "backend/uv.lock" not in names
+
+
 def test_sensitive_filename_forced(temp_project):
     """Verifica que archivos con nombres sensibles se incluyan con --force."""
     key_file = temp_project / "id_rsa.pub"  # .pub is not in SECRET_FILE_PATTERNS but id_rsa is?
