@@ -24,7 +24,7 @@ def run_git_command(root: Path, args: list[str]) -> str | None:
             errors="replace",
             check=True,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, OSError):
         return None
     return result.stdout.strip()
 
@@ -139,7 +139,7 @@ def get_git_commit_info(root: Path) -> tuple[str | None, str | None]:
             text=True,
             check=True,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, OSError):
         return None, None
 
     data = result.stdout.strip()

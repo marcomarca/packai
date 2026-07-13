@@ -51,13 +51,11 @@ La primera GUI debería ser un adaptador delgado: selección de raíz/salida, ed
 
 ## Verificación de esta entrega
 
-Ejecutada con Python 3.13.5 y `uv` 0.10.0:
+La corrección de portabilidad se verificó con Python 3.13.5:
 
-- `uv lock --check`: correcto.
-- `uv sync --locked`: correcto.
-- `uv run ruff format --check .`: correcto.
-- `uv run ruff check .`: correcto.
-- `uv run mypy src/packai`: correcto, sin errores.
-- `uv run pytest`: 50 pruebas aprobadas.
-- `uv run pytest --cov=packai --cov-fail-under=70`: 73.51% de cobertura.
-- Smoke test de `packai` con exclusión de carpeta y apertura real del ZIP: correcto.
+- `pytest`: 51 pruebas aprobadas.
+- `pytest --cov=packai --cov-fail-under=70`: 74.21% de cobertura.
+- La regresión simula el `NotADirectoryError` observado en Windows y exige que los adaptadores Git lo traduzcan a ausencia de contexto, sin propagar la excepción.
+- El `uv.lock` del usuario no fue modificado y no forma parte del ZIP de entrega.
+
+Los controles `ruff` y `mypy` permanecían correctos en la ejecución de Windows aportada antes de esta corrección.

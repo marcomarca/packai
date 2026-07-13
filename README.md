@@ -129,7 +129,7 @@ Contratos públicos:
 
 - `.ignore2packai`: patrones `fnmatch`, uno por línea; se omiten líneas vacías y comentarios con `#`.
 - `config_pack_ai.py`: conserva la opción `INCLUDE_ENV_EXAMPLE` por compatibilidad.
-- `.python-version`, `pyproject.toml` y `uv.lock`: definen el entorno reproducible.
+- `.python-version`, `pyproject.toml` y el `uv.lock` mantenido por el repositorio consumidor definen el entorno reproducible. El ZIP de esta entrega no sustituye ese lockfile.
 
 ## Calidad
 

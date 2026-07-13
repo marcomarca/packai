@@ -1,5 +1,7 @@
 # Comandos recomendados
 
+> Este ZIP no incluye ni modifica `uv.lock`. Los comandos siguientes usan el `uv.lock` existente en tu repositorio.
+
 ## Preparar el entorno
 
 ```bash

@@ -13,7 +13,7 @@ def test_new_public_api_exports_frontend_contracts() -> None:
     assert callable(PackService().pack)
 
 
-def test_legacy_facade_preserves_existing_callable_surface() -> None:
+def test_legacy_facade_preserves_existing_callable_surface(tmp_path: Path) -> None:
     required_callables = {
         "build_default_zip_stem",
         "build_git_context_markdown",
@@ -32,4 +32,6 @@ def test_legacy_facade_preserves_existing_callable_surface() -> None:
     for name in required_callables:
         assert callable(getattr(pack_ai, name))
     assert pack_ai.GIT_CONTEXT_FILENAME == "git--diff_last_commit.md"
-    assert pack_ai.build_default_zip_stem(Path("project")).startswith("project")
+    project = tmp_path / "project"
+    project.mkdir()
+    assert pack_ai.build_default_zip_stem(project).startswith("project")
