@@ -171,7 +171,13 @@
         }),
         h('span', { className: 'folder-icon' }, node.disabled ? '🔒' : '📁'),
         h('span', { className: 'folder-name' }, node.name),
-        node.direct_file_count ? h('span', { className: 'file-count' }, node.direct_file_count + ' archivos') : null,
+        node.disabled ? null : h('span', { className: 'folder-meta' },
+          node.direct_file_count ? h('span', { className: 'file-count' }, node.direct_file_count + ' archivos') : null,
+          h('span', {
+            className: 'folder-size',
+            title: 'Tamaño recursivo en disco; no incluye carpetas bloqueadas'
+          }, formatSize(node.total_size_bytes || 0))
+        ),
         warnings ? h('span', { className: 'warning-pill' }, warnings + ' alertas') : null,
         node.disabled_reason ? h('span', { className: 'policy-reason' }, node.disabled_reason) : null
       ),
@@ -561,7 +567,7 @@
       h('main', { className: 'workspace' },
         h('section', { className: 'tree-panel panel' },
           h('div', { className: 'panel-header' },
-            h('div', null, h('h2', null, 'Carpetas del proyecto'), h('p', null, 'Desmarca subárboles completos; las rutas bloqueadas son informativas.')),
+            h('div', null, h('h2', null, 'Carpetas del proyecto'), h('p', null, 'Tamaños recursivos en disco; las rutas bloqueadas no se miden.')),
             h('button', { type: 'button', className: 'secondary-button', onClick: this.refresh.bind(this), disabled: busy }, this.state.calculating ? 'Actualizando…' : 'Actualizar')
           ),
           h('div', { className: 'search-wrap' },

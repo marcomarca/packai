@@ -290,6 +290,7 @@ def _folder_to_json(node: FolderNode) -> JsonObject:
         "disabled": node.disabled,
         "disabled_reason": node.disabled_reason,
         "direct_file_count": node.direct_file_count,
+        "total_size_bytes": node.total_size_bytes,
         "children": [_folder_to_json(child) for child in node.children],
     }
 

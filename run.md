@@ -65,12 +65,14 @@ uv run packai gui .
 
 Prueba manual mínima:
 
-1. Desmarca una carpeta y comprueba el estado indeterminado de su ancestro.
-2. Verifica que las métricas se recalculen.
-3. Activa y desactiva `Force` y contexto Git.
-4. Crea o modifica un archivo y comprueba la actualización por eventos o sondeo.
-5. Pulsa `Generar ZIP` dos veces después de modificar el proyecto.
-6. Copia ambos comandos reproducibles y comprueba su sintaxis.
+1. Comprueba que cada carpeta habilitada muestre su tamaño recursivo en B, KB, MB o GB.
+2. Verifica que `node_modules` aparezca bloqueado, sin tamaño, y que su contenido no afecte al tamaño del padre.
+3. Desmarca una carpeta y comprueba el estado indeterminado de su ancestro.
+4. Verifica que las métricas se recalculen.
+5. Activa y desactiva `Force` y contexto Git.
+6. Crea o modifica un archivo y comprueba la actualización por eventos o sondeo.
+7. Pulsa `Generar ZIP` dos veces después de modificar el proyecto.
+8. Copia ambos comandos reproducibles y comprueba su sintaxis.
 
 En Windows, si la ventana no inicia aun con el extra instalado:
 

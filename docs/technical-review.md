@@ -67,11 +67,13 @@ La versión 2.1 añade:
 
 ## Mejora de interfaz gráfica
 
-La versión 2.2 añade una superficie PyWebView opcional sin desplazar al CLI:
+La versión 2.2 introdujo una superficie PyWebView opcional sin desplazar al CLI. La versión 2.3 añade tamaños recursivos al árbol:
 
 - `packai gui .` con los mismos flags iniciales relevantes;
 - árbol exclusivo de carpetas con estados marcado, desmarcado, indeterminado y bloqueado;
 - carpetas ignoradas visibles como hojas deshabilitadas;
+- tamaño recursivo por carpeta obtenido durante el mismo recorrido del árbol;
+- `node_modules` y otros subárboles bloqueados se representan sin atravesarlos ni calcular su peso;
 - selección efímera traducida a exclusiones relativas mínimas;
 - preview reactiva de tokens, tamaños, archivos y hallazgos;
 - generación repetible que reescanea antes de escribir;
@@ -94,8 +96,8 @@ La GUI no persiste configuración, no elige una ruta de salida y no contiene reg
 
 - Ruff format/check: correcto en el proyecto completo.
 - mypy estricto: sin errores en 25 módulos de `src/packai`.
-- Pytest: 78 pruebas aprobadas.
-- Cobertura: 78.87%, con gate mínimo de 70%.
+- Pytest: 79 pruebas aprobadas.
+- Cobertura: 79.02%, con gate mínimo de 70%.
 - Tokenizador: vocabulario `o200k_base` local, 199,998 entradas y SHA-256 verificado.
 - Wheel: construido desde una copia aislada y revisado para comprobar recursos de GUI y tokenización.
 - Recursos: HTML, CSS, JavaScript, React, licencias y vocabulario presentes dentro del wheel.

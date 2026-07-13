@@ -108,11 +108,13 @@ body {
 }
 .tree-chevron.invisible { visibility: hidden; }
 .folder-icon { width: 18px; filter: saturate(.8); }
-.folder-name { font-weight: 600; white-space: nowrap; }
-.file-count, .policy-reason { color: #6f7b96; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folder-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; white-space: nowrap; }
+.folder-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.file-count, .folder-size, .policy-reason { color: #6f7b96; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folder-size { min-width: 58px; color: #909bb5; text-align: right; font-variant-numeric: tabular-nums; }
 .policy-reason { margin-left: auto; }
 .warning-pill {
-  margin-left: auto; padding: 3px 7px; border-radius: 999px; color: #ffc86f; background: rgba(255, 174, 72, .1); font-size: 10px;
+  padding: 3px 7px; border-radius: 999px; color: #ffc86f; background: rgba(255, 174, 72, .1); font-size: 10px; white-space: nowrap;
 }
 
 .side-panel { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }

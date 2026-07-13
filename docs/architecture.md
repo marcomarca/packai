@@ -46,7 +46,7 @@ La dirección de dependencia apunta hacia contratos y políticas. El núcleo no 
 | `clipboard.py` | Integración PowerShell aislada. |
 | `cli.py` | Parseo, presentación, despacho de `gui` y traducción de errores a códigos de salida. |
 | `gui/api.py` | Puente serializable que traduce estado visual a `PackRequest`. |
-| `gui/tree.py` | Árbol de carpetas y estados bloqueados por política. |
+| `gui/tree.py` | Árbol de carpetas, estados bloqueados y tamaños recursivos sin recorrer subárboles prohibidos. |
 | `gui/watcher.py` | Monitor de eventos con debounce y fallback de sondeo. |
 | `gui/launcher.py` | Arranque opcional de PyWebView y diagnóstico del backend gráfico. |
 | `gui/resources/` | React, HTML, CSS y JavaScript locales sin servidor ni CDN. |
@@ -87,7 +87,7 @@ El ZIP se crea en un temporal ubicado en el mismo sistema de archivos que el des
 ## Flujo de la GUI
 
 1. `packai gui` valida la raíz y traduce flags a `GuiLaunchOptions`.
-2. `GuiBridge.initialize` escanea el árbol de carpetas y solicita `PackService.preview`.
+2. `GuiBridge.initialize` escanea el árbol de carpetas, agrega tamaños recursivos y solicita `PackService.preview`.
 3. React conserva en memoria exclusiones, opciones y estado de expansión.
 4. Cada cambio de selección se agrupa con debounce y solicita una preview nueva.
 5. `DirectoryChangeMonitor` invalida la caché ante cambios y solicita un refresco.

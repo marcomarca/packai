@@ -54,6 +54,8 @@ La GUI incluye:
 - árbol jerárquico exclusivo de carpetas;
 - casillas seleccionadas, desmarcadas e indeterminadas;
 - carpetas bloqueadas visibles pero deshabilitadas;
+- tamaño recursivo en disco por carpeta, formateado dinámicamente en B, KB, MB o GB;
+- `node_modules` y los demás subárboles bloqueados nunca se recorren ni se miden;
 - métricas reactivas de tokens, tamaño, texto, binarios y ranking;
 - opciones `Force`, contexto Git, `.env.example`, ranking y portapapeles;
 - reescaneo por eventos con debounce y sondeo de baja frecuencia como fallback;
