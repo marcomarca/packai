@@ -27,6 +27,7 @@
 - creación del ZIP aunque falle completamente el análisis de métricas;
 - árbol de carpetas con nodos bloqueados visibles y no recorridos;
 - traducción de exclusiones y opciones entre GUI, `PackRequest` y comandos reproducibles;
+- contención de los interruptores invisibles dentro de su control y anclaje permanente del root al viewport;
 - reescaneo antes de generar y descarte de exclusiones que ya no existen;
 - despacho de `packai gui` sin modificar el parser heredado.
 
@@ -75,4 +76,4 @@ uv sync --locked --extra gui
 uv run packai gui .
 ```
 
-Comprobar: estados triestado, nodos bloqueados, actualización tras crear/eliminar carpetas, Force, contexto Git, interruptor de lockfiles, copia de comandos y dos generaciones consecutivas después de modificar archivos. La CI no debe intentar abrir una ventana en un runner sin escritorio.
+Comprobar: estados triestado, nodos bloqueados, actualización tras crear/eliminar carpetas, Force, contexto Git, interruptor de lockfiles, copia de comandos y dos generaciones consecutivas después de modificar archivos. Para la regresión del viewport, desplazarse hasta Opciones, alternar varias veces `Incluir lockfiles` en un proyecto cuya preview cambie mucho de altura y redimensionar/maximizar la ventana; la barra superior debe permanecer en `y=0`, el dock debe seguir pegado al borde inferior y el scroll solo debe ocurrir dentro de los paneles. La CI no debe intentar abrir una ventana nativa en un runner sin escritorio.

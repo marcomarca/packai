@@ -134,3 +134,16 @@ La GUI no persiste configuración, no elige una ruta de salida y no contiene reg
 - La decisión específica de lockfiles prevalece sobre patrones antiguos de `.ignore2packai`, evitando que configuraciones heredadas hagan que el interruptor parezca no funcionar.
 - Los lockfiles textuales mantienen el escaneo de secretos. Los lockfiles binarios reconocidos se permiten sin relajar la política para otros binarios desconocidos.
 - El nuevo campo se añadió al final de `PackRequest` para no desplazar los argumentos posicionales existentes.
+
+## Corrección de estabilidad del viewport
+
+La GUI tenía un defecto de posicionamiento en los interruptores: el `input[type=checkbox]` invisible usaba `position: absolute` sin que `.toggle-control` estableciera un bloque contenedor. Cuando una preview modificaba considerablemente la altura de las métricas, WebView2 intentaba mantener enfocado ese input, desplazaba el documento principal y dejaba la aplicación por encima del viewport. El scroll raíz estaba oculto, por lo que el usuario no podía volver manualmente al inicio.
+
+La corrección establece cuatro invariantes:
+
+- cada input invisible ocupa exactamente el área de su propio `.toggle-control`, que ahora es `position: relative`;
+- `#root` está fijado mediante `position: fixed; inset: 0`, por lo que un desplazamiento accidental del documento no mueve la aplicación;
+- la cuadrícula principal usa áreas explícitas y `minmax(0, 1fr)`, evitando que la presencia condicional del banner de error cambie las filas de workspace y dock;
+- después de una preview, el control activo se vuelve a mostrar dentro del scroll lateral, sin desplazar el documento raíz.
+
+El guard de JavaScript sigue restableciendo el origen ante `scroll`, `resize`, cambios de `visualViewport`, foco y re-render. Ya no es la corrección primaria: funciona como recuperación defensiva sobre una geometría CSS que no produce overflow del documento.

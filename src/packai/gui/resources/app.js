@@ -4,6 +4,28 @@
   var h = React.createElement;
   var numberFormat = new Intl.NumberFormat('es-BO');
 
+  // Chromium may retain a hidden document offset after focusing a control during relayout.
+  function resetDocumentScroll() {
+    var scrollingElement = document.scrollingElement || document.documentElement;
+    var root = document.getElementById('root');
+
+    if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+    if (scrollingElement) {
+      scrollingElement.scrollLeft = 0;
+      scrollingElement.scrollTop = 0;
+    }
+    document.documentElement.scrollLeft = 0;
+    document.documentElement.scrollTop = 0;
+    if (document.body) {
+      document.body.scrollLeft = 0;
+      document.body.scrollTop = 0;
+    }
+    if (root) {
+      root.scrollLeft = 0;
+      root.scrollTop = 0;
+    }
+  }
+
   function apiReady() {
     return window.pywebview && window.pywebview.api;
   }
@@ -291,6 +313,10 @@
     this.refreshTimer = null;
     this.requestSerial = 0;
     this.filesystemRevision = 0;
+    this.viewportFrame = null;
+    this.viewportGuard = this.stabilizeViewport.bind(this);
+    this.visualViewport = null;
+    this.revealActiveOption = false;
   }
 
   App.prototype = Object.create(React.Component.prototype);
@@ -299,6 +325,15 @@
   App.prototype.componentDidMount = function () {
     var self = this;
     window.__packaiApp = this;
+    window.addEventListener('scroll', this.viewportGuard, false);
+    window.addEventListener('resize', this.viewportGuard, false);
+    document.addEventListener('focusin', this.viewportGuard, true);
+    this.visualViewport = window.visualViewport || null;
+    if (this.visualViewport) {
+      this.visualViewport.addEventListener('scroll', this.viewportGuard, false);
+      this.visualViewport.addEventListener('resize', this.viewportGuard, false);
+    }
+    this.stabilizeViewport();
     window.packaiFilesystemChanged = function () { self.onFilesystemChanged(); };
     window.packaiMonitorReady = function (payload) {
       self.setState({ monitorMode: payload.mode === 'events' ? 'eventos' : 'sondeo eficiente' });
@@ -310,9 +345,49 @@
     }
   };
 
+  App.prototype.componentDidUpdate = function () {
+    this.stabilizeViewport();
+  };
+
   App.prototype.componentWillUnmount = function () {
     if (this.previewTimer) window.clearTimeout(this.previewTimer);
     if (this.refreshTimer) window.clearTimeout(this.refreshTimer);
+    if (this.viewportFrame !== null) window.cancelAnimationFrame(this.viewportFrame);
+    window.removeEventListener('scroll', this.viewportGuard, false);
+    window.removeEventListener('resize', this.viewportGuard, false);
+    document.removeEventListener('focusin', this.viewportGuard, true);
+    if (this.visualViewport) {
+      this.visualViewport.removeEventListener('scroll', this.viewportGuard, false);
+      this.visualViewport.removeEventListener('resize', this.viewportGuard, false);
+    }
+  };
+
+  App.prototype.stabilizeViewport = function () {
+    var self = this;
+    resetDocumentScroll();
+    if (this.viewportFrame !== null) window.cancelAnimationFrame(this.viewportFrame);
+    this.viewportFrame = window.requestAnimationFrame(function () {
+      resetDocumentScroll();
+      self.viewportFrame = null;
+    });
+  };
+
+  // Metrics above the options panel can grow or shrink while the selected control keeps focus.
+  App.prototype.keepFocusedOptionVisible = function () {
+    if (!this.revealActiveOption) return;
+    this.revealActiveOption = false;
+
+    var active = document.activeElement;
+    var optionsPanel = document.querySelector('.options-panel');
+    if (!active || !optionsPanel || !optionsPanel.contains(active)) return;
+
+    var self = this;
+    var control = active.closest('.toggle-control, .field-row');
+    if (!control) return;
+    window.requestAnimationFrame(function () {
+      control.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      self.stabilizeViewport();
+    });
   };
 
   App.prototype.initialize = function () {
@@ -400,7 +475,7 @@
         options: response.options,
         preview: response.preview || emptyPreview(),
         commands: response.commands || self.state.commands
-      });
+      }, function () { self.keepFocusedOptionVisible(); });
     }).catch(function (error) { self.handleError({ title: 'Error al calcular métricas', message: error.message }); });
   };
 
@@ -420,6 +495,7 @@
     if (this.state.packing) return;
     var options = Object.assign({}, this.state.options);
     options[key] = value;
+    this.revealActiveOption = true;
     this.setState({ options: options, notice: '' }, this.schedulePreview.bind(this));
   };
 

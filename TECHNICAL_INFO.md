@@ -48,3 +48,19 @@ El escritor final usa:
 - Cobertura: 79.68%, superior al umbral de 70%.
 - JavaScript de la GUI: comprobación sintáctica con `node --check`.
 - Paquete: sdist y wheel 2.4.0 construidos correctamente; los artefactos de build no se incluyen en este ZIP fuente.
+
+## Corrección de estabilidad del viewport de la GUI
+
+Se corrigió el desplazamiento irreversible de toda la interfaz al alternar opciones que cambian mucho el contenido de la preview, especialmente `Incluir lockfiles`.
+
+La causa era un checkbox transparente con posicionamiento absoluto sin contenedor relativo. Al conservar el foco mientras cambiaba la altura del panel lateral, WebView2 desplazaba el documento principal para revelar el control invisible. Como el scroll del documento estaba oculto, la barra superior quedaba fuera de la ventana y no existía una acción de usuario capaz de restaurarla.
+
+La solución contiene el input dentro de su interruptor, fija `#root` al viewport, asigna áreas explícitas al layout principal y mantiene visible el control activo dentro del panel lateral. Se conserva un guard de recuperación para scroll, foco, resize y `visualViewport`.
+
+Validación específica:
+
+- 97 pruebas Python aprobadas;
+- Ruff format/check y mypy estricto correctos;
+- sintaxis de `app.js` validada con Node;
+- smoke test automatizado en Chromium alternando lockfiles con un crecimiento grande de métricas;
+- viewport probado en 980×640, 1360×860, 1568×963 y 1920×1080, siempre con `scrollY = 0`, barra superior en `y = 0` y dock pegado al borde inferior.
