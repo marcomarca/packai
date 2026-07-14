@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import resources
 from unittest.mock import patch
 
 import pytest
@@ -21,6 +22,15 @@ def test_bundled_tiktoken_estimator_counts_offline() -> None:
     assert estimate.count == 2
     assert estimate.method == "tiktoken:o200k_base"
     assert estimate.degraded is False
+
+
+def test_tiktoken_accepts_lf_and_crlf_resource_materializations() -> None:
+    bundled = resources.files("packai.data").joinpath("o200k_base.tiktoken").read_bytes()
+    lf_data = bundled.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    crlf_data = lf_data.replace(b"\n", b"\r\n")
+
+    assert TiktokenEstimator(encoding_data=lf_data).estimate("hello world").count == 2
+    assert TiktokenEstimator(encoding_data=crlf_data).estimate("hello world").count == 2
 
 
 def test_tiktoken_rejects_corrupted_bundled_vocabulary() -> None:

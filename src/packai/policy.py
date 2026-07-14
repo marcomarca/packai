@@ -241,23 +241,110 @@ SECRET_PATTERNS = {
     "JWT Token": re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
 }
 
-# Patrones contextuales para asignaciones sospechosas
+# Las reglas genéricas se aplican sobre asignaciones literales y sobre nombres
+# de configuración que TERMINAN en un concepto sensible. No basta con contener
+# la palabra ``token`` o ``password``: nombres de código como
+# ``token_estimator`` y ``password_encoder`` no son credenciales.
+_ASSIGNMENT_PATTERN = re.compile(
+    r"""
+    (?P<key>[\"']?[A-Za-z_][A-Za-z0-9_.-]*[\"']?)
+    \s*(?::|(?<![=!<>])=(?!=|>))\s*
+    (?:
+        \"(?P<double>(?:\\.|[^\"\\])*)\"
+        | '(?P<single>(?:\\.|[^'\\])*)'
+        | (?P<bare>[A-Za-z0-9_./+:@-][A-Za-z0-9_./+=:@-]*)
+    )
+    """,
+    re.VERBOSE,
+)
+_ASSIGNMENT_TRIGGER_PATTERN = re.compile(
+    r"""
+    (?:
+        api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key|app[_-]?key
+        | token|password|passwd|pwd
+        | database[_-]?url|db[_-]?url|database[_-]?uri|mongo[_-]?uri|redis[_-]?url
+    )
+    [\"']?\s*(?::|(?<![=!<>])=(?!=|>))
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Compatibilidad para integraciones 1.x que importaban este mapping. El
+# escáner principal usa el parser conservador inferior; estas expresiones ya no
+# aceptan una palabra sensible en cualquier posición del identificador.
 SENSITIVE_ASSIGNMENT_PATTERNS = {
     "Generic API Key Assignment": re.compile(
-        r"(?i)\b[A-Z0-9_]*(?:API_KEY|ACCESS_KEY|SECRET_KEY|PRIVATE_KEY|APP_KEY)[A-Z0-9_]*\b\s*[:=]\s*[\"']?[^\"'\s]{12,}[\"']?"
+        r"(?i)\b(?:[A-Z0-9]+[_\-.])*(?:API_KEY|ACCESS_KEY|SECRET_KEY|PRIVATE_KEY|APP_KEY)"
+        r"\b\s*(?::|(?<![=!<>])=(?!=|>))\s*[\"']?[^\"'\s,)}\]]{12,}[\"']?"
     ),
     "Generic Token Assignment": re.compile(
-        r"(?i)\b[A-Z0-9_]*(?:TOKEN|AUTH_TOKEN|ACCESS_TOKEN|REFRESH_TOKEN|ID_TOKEN)[A-Z0-9_]*\b\s*[:=]\s*[\"']?[^\"'\s]{12,}[\"']?"
+        r"(?i)\b(?:[A-Z0-9]+[_\-.])*TOKEN\b\s*"
+        r"(?::|(?<![=!<>])=(?!=|>))\s*[\"']?[^\"'\s,)}\]]{12,}[\"']?"
     ),
     "Generic Password Assignment": re.compile(
-        r"(?i)\b[A-Z0-9_]*(?:PASSWORD|PASSWD|PWD)[A-Z0-9_]*\b\s*[:=]\s*[\"']?[^\"'\s]{8,}[\"']?"
+        r"(?i)\b(?:[A-Z0-9]+[_\-.])*(?:PASSWORD|PASSWD|PWD)\b\s*"
+        r"(?::|(?<![=!<>])=(?!=|>))\s*[\"']?[^\"'\s,)}\]]{8,}[\"']?"
     ),
     "Generic DB Connection String": re.compile(
-        r"(?i)\b(?:DATABASE_URL|DB_URL|DATABASE_URI|MONGO_URI|REDIS_URL)\b\s*[:=]\s*[\"']?[^\"'\s]{12,}[\"']?"
+        r"(?i)\b(?:DATABASE_URL|DB_URL|DATABASE_URI|MONGO_URI|REDIS_URL)\b\s*"
+        r"(?::|(?<![=!<>])=(?!=|>))\s*[\"']?[^\"'\s,)}\]]{12,}[\"']?"
     ),
 }
 
-MAX_SECRET_SCAN_BYTES: Final = 1024 * 1024
+_ASSIGNMENT_KEY_RULES: tuple[tuple[str, tuple[str, ...], int], ...] = (
+    (
+        "Generic API Key Assignment",
+        ("api_key", "access_key", "secret_key", "private_key", "app_key"),
+        12,
+    ),
+    ("Generic Token Assignment", ("token",), 12),
+    ("Generic Password Assignment", ("password", "passwd", "pwd"), 8),
+    (
+        "Generic DB Connection String",
+        ("database_url", "db_url", "database_uri", "mongo_uri", "redis_url"),
+        12,
+    ),
+)
+
+# Evita ejecutar decenas de expresiones regulares sobre archivos grandes cuando
+# ni siquiera contienen el prefijo requerido. La comprobación final sigue
+# haciéndose con la regex completa.
+_SECRET_PATTERN_TRIGGERS: dict[str, tuple[str, ...]] = {
+    "OpenAI API Key": ("sk-",),
+    "Groq API Key": ("gsk_",),
+    "Anthropic API Key": ("sk-ant-",),
+    "Hugging Face Token": ("hf_",),
+    "Replicate API Token": ("r8_",),
+    "Perplexity API Key": ("pplx-",),
+    "Generic SK API Key": ("sk-",),
+    "AWS Access Key ID": ("AKIA", "ASIA"),
+    "AWS Secret Access Key Context": ("aws_secret_access_key",),
+    "Google API Key": ("AIza",),
+    "Google OAuth Client Secret": ("GOCSPX-",),
+    "Google Service Account Private Key": ("-----BEGIN PRIVATE KEY-----",),
+    "Azure Storage Connection String": ("DefaultEndpointsProtocol=",),
+    "Azure Storage Account Key Context": ("azure", "account"),
+    "Cloudflare API Token Context": ("cloudflare", "cf_"),
+    "DigitalOcean Token": ("dop_v1_",),
+    "Heroku API Key Context": ("heroku",),
+    "GitHub Classic Token": ("ghp_", "gho_", "ghu_", "ghs_", "ghr_"),
+    "GitHub Fine-Grained Token": ("github_pat_",),
+    "GitLab Token": ("glpat-",),
+    "GitLab OAuth Token": ("gloas-",),
+    "NPM Token": ("npm_",),
+    "PyPI Token": ("pypi-",),
+    "Generic Private Key": ("-----BEGIN",),
+    "Stripe Secret Key": ("sk_live_", "sk_test_"),
+    "Slack Token": ("xox",),
+    "Discord Bot Token": (".",),
+    "Telegram Bot Token": (":",),
+    "SendGrid API Key": ("SG.",),
+    "JWT Token": ("eyJ",),
+}
+
+# El recurso o200k ocupa ~3.8 MB. El límite debe impedir escaneos de archivos
+# desproporcionados sin excluir recursos textuales normales del propio paquete.
+MAX_SECRET_SCAN_BYTES: Final = 8 * 1024 * 1024
 
 
 def mask_secret(value: str, visible_start: int = 6, visible_end: int = 4) -> str:
@@ -447,10 +534,71 @@ def should_ignore_path(
     return None
 
 
+def _normalize_assignment_key(raw_key: str) -> str:
+    """Normalize quoted, dotted, dashed, and camelCase configuration keys."""
+    key = raw_key.strip().strip("\"'")
+    key = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key)
+    return re.sub(r"[^A-Za-z0-9]+", "_", key).strip("_").casefold()
+
+
+def _assignment_rule(raw_key: str) -> tuple[str, int] | None:
+    normalized = _normalize_assignment_key(raw_key)
+    for kind, suffixes, minimum_length in _ASSIGNMENT_KEY_RULES:
+        if any(normalized == suffix or normalized.endswith(f"_{suffix}") for suffix in suffixes):
+            return kind, minimum_length
+    return None
+
+
+def _looks_like_placeholder(value: str) -> bool:
+    normalized = value.strip().strip("\"'").casefold()
+    compact = re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")
+    if not compact:
+        return True
+    placeholder_fragments = (
+        "changeme",
+        "change_me",
+        "dummy",
+        "example",
+        "fake",
+        "not_packaged",
+        "placeholder",
+        "redacted",
+        "replace_me",
+        "sample",
+        "your_api_key",
+        "your_password",
+        "your_token",
+    )
+    if any(fragment in compact for fragment in placeholder_fragments):
+        return True
+
+    # Numeraciones repetitivas como sk-1234567890... son fixtures habituales,
+    # no claves válidas de los proveedores detectados por prefijo.
+    payload = re.sub(
+        r"^(?:sk(?:-proj|-ant)?-|gsk_|hf_|r8_|pplx-|npm_|pypi-|glpat-|gloas-)",
+        "",
+        normalized,
+    )
+    return bool(payload) and (payload.isdigit() or len(set(payload)) == 1)
+
+
+def _plausible_assignment_value(value: str, minimum_length: int, *, quoted: bool) -> bool:
+    stripped = value.strip()
+    if len(stripped) < minimum_length or any(character.isspace() for character in stripped):
+        return False
+    if _looks_like_placeholder(stripped):
+        return False
+
+    # Un identificador desnudo suele ser una referencia de código o un nombre
+    # de tipo (TOKEN = TokenProvider), no el valor literal de una credencial.
+    return quoted or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", stripped) is None
+
+
 def scan_text_for_secrets(content: str) -> tuple[SecretFinding, ...]:
-    """Scan text using high-confidence and contextual secret patterns."""
+    """Scan text using high-confidence tokens and conservative assignments."""
     findings: list[SecretFinding] = []
     occupied_ranges: list[tuple[int, int]] = []
+    folded_content = content.casefold()
 
     def line_number(position: int) -> int:
         return content.count("\n", 0, position) + 1
@@ -461,9 +609,12 @@ def scan_text_for_secrets(content: str) -> tuple[SecretFinding, ...]:
         )
 
     for kind, pattern in SECRET_PATTERNS.items():
+        triggers = _SECRET_PATTERN_TRIGGERS.get(kind, ())
+        if triggers and not any(trigger.casefold() in folded_content for trigger in triggers):
+            continue
         for match in pattern.finditer(content):
             start, end = match.span()
-            if overlaps(start, end):
+            if overlaps(start, end) or _looks_like_placeholder(match.group(0)):
                 continue
             findings.append(
                 SecretFinding(
@@ -474,19 +625,38 @@ def scan_text_for_secrets(content: str) -> tuple[SecretFinding, ...]:
             )
             occupied_ranges.append((start, end))
 
-    for kind, pattern in SENSITIVE_ASSIGNMENT_PATTERNS.items():
-        for match in pattern.finditer(content):
-            start, end = match.span()
-            if overlaps(start, end):
-                continue
-            findings.append(
-                SecretFinding(
-                    kind=kind,
-                    masked_value=mask_secret(match.group(0)),
-                    line=line_number(start),
-                )
+    assignment_matches = (
+        _ASSIGNMENT_PATTERN.finditer(content)
+        if _ASSIGNMENT_TRIGGER_PATTERN.search(content) is not None
+        else ()
+    )
+    for match in assignment_matches:
+        rule = _assignment_rule(match.group("key"))
+        if rule is None:
+            continue
+        kind, minimum_length = rule
+        value_group = next(
+            name for name in ("double", "single", "bare") if match.group(name) is not None
+        )
+        value = match.group(value_group)
+        assert value is not None
+        start, end = match.span(value_group)
+        if overlaps(start, end):
+            continue
+        if not _plausible_assignment_value(
+            value,
+            minimum_length,
+            quoted=value_group != "bare",
+        ):
+            continue
+        findings.append(
+            SecretFinding(
+                kind=kind,
+                masked_value=mask_secret(value),
+                line=line_number(start),
             )
-            occupied_ranges.append((start, end))
+        )
+        occupied_ranges.append((start, end))
 
     return tuple(findings)
 

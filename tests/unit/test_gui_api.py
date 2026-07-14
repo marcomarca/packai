@@ -89,7 +89,7 @@ def test_gui_bridge_force_changes_secret_inclusion_without_persisting_state(tmp_
     secure = root / "secure"
     secure.mkdir(parents=True)
     (secure / "config.py").write_text(
-        'OPENAI_API_KEY = "sk-123456789012345678901234567890123456"',
+        'OPENAI_API_KEY = "sk-' + "Ab3Cd4Ef5Gh6Ij7Kl8Mn9Op0Qr1St2Uv" + '"',
         encoding="utf-8",
     )
     bridge = GuiBridge(GuiLaunchOptions(root=root, copy_mode="none"))

@@ -208,6 +208,9 @@ Un fallo total del análisis deja `metrics=None`, emite una advertencia y no inv
 - Los lockfiles conocidos (`uv.lock`, `bun.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock` y otros) se incluyen por defecto, aunque una regla antigua como `*.lock` siga presente en `.ignore2packai`.
 - `--no-lockfiles` o el interruptor de la GUI los retira en bloque; `--lockfiles` los vuelve a activar explícitamente.
 - Los lockfiles textuales se escanean completos en busca de secretos, incluso cuando superan el límite normal de escaneo; un hallazgo real conserva la política de bloqueo o `--force`. Los lockfiles binarios reconocidos, como `bun.lockb`, se conservan sin inspección interna.
+- Las asignaciones genéricas solo se bloquean cuando el nombre de configuración termina en un concepto sensible (`*_TOKEN`, `*_PASSWORD`, `*_API_KEY`, etc.) y el valor es un literal plausible; símbolos de código como `token_estimator` o `password_encoder` no se consideran credenciales.
+- Los archivos textuales de hasta 8 MiB se escanean normalmente. Los lockfiles textuales conservan el escaneo completo aunque superen ese umbral.
+- El vocabulario local `o200k_base.tiktoken` se verifica sobre saltos de línea canónicos, por lo que una extracción Windows con CRLF no degrada el conteo exacto; `.gitattributes` evita además conversiones futuras del recurso.
 - Los hallazgos se enmascaran antes de formar parte de resultados.
 - Los enlaces simbólicos no se siguen.
 - Las firmas ejecutables se bloquean aunque el archivo use una extensión de imagen.

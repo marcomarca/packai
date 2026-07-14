@@ -38,7 +38,9 @@ Los estimadores falsos hacen que las pruebas de dominio sean deterministas y no 
 
 ### Integración
 
-Las pruebas abren ZIP reales y comparan bytes. Git y portapapeles se aíslan porque dependen del sistema. Un smoke test con `tiktoken` instalado debe comprobar, sin acceso de red, que el método informado sea `tiktoken:o200k_base` y no degradado. También se verifica que un vocabulario corrupto active el fallback.
+Las pruebas abren ZIP reales y comparan bytes. Las fixtures que validan preservación exacta escriben bytes, no texto sujeto a traducción `LF`/`CRLF` de Windows. Git y portapapeles se aíslan porque dependen del sistema. Un smoke test con `tiktoken` instalado debe comprobar, sin acceso de red, que el método informado sea `tiktoken:o200k_base` y no degradado. También se verifica que el mismo vocabulario sea aceptado con `LF` o `CRLF`, y que una alteración distinta de los saltos de línea active el fallback.
+
+El escáner tiene regresiones explícitas para diferenciar credenciales literales de símbolos de código que contienen palabras como `token` o `password`. El smoke test del propio repositorio debe conservar los módulos Python, los recursos JavaScript de la GUI y el vocabulario del tokenizador.
 
 ## Gate local y CI
 

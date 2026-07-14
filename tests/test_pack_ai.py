@@ -22,6 +22,10 @@ from pack_ai import (
 )
 
 
+def _fake_openai_key() -> str:
+    return "sk-" + "Ab3Cd4Ef5Gh6Ij7Kl8Mn9Op0Qr1St2Uv"
+
+
 @pytest.fixture
 def temp_project(tmp_path):
     """Crea una estructura de proyecto temporal para pruebas."""
@@ -33,11 +37,45 @@ def temp_project(tmp_path):
 def test_large_file_scan_no_crash(temp_project):
     """Verifica que archivos grandes no causen crash y sean reportados."""
     large_file = temp_project / "large.txt"
-    large_file.write_bytes(b"a" * (1024 * 1024 + 1))
+    large_file.write_bytes(b"a" * (8 * 1024 * 1024 + 1))
 
     findings = scan_file_for_secrets(large_file)
     assert len(findings) == 1
     assert findings[0]["type"] == "Archivo demasiado grande para escaneo"
+
+
+def test_secret_scanner_ignores_code_symbols_that_only_contain_sensitive_words(temp_project):
+    source = temp_project / "source.py"
+    source.write_text(
+        "\n".join(
+            (
+                "token_estimator: TokenEstimator | None = None",
+                "largest_token_metrics = metrics[:token_top]",
+                "password = Lj(value)",
+                "special_tokens = SPECIAL_TOKENS",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    assert scan_file_for_secrets(source) == []
+
+
+def test_secret_scanner_detects_literal_generic_credentials(temp_project):
+    config = temp_project / "config.txt"
+    token_key = "SERVICE_" + "TOKEN"
+    password_key = "DATABASE_" + "PASSWORD"
+    credential_value = "aB3dE5fG7hJ9" + "kL2mN4pQ"
+    password_value = "C0rrect-Horse-" + "Battery"
+    config.write_text(
+        f'{token_key}="{credential_value}"\n{password_key}="{password_value}"\n',
+        encoding="utf-8",
+    )
+
+    kinds = {finding["type"] for finding in scan_file_for_secrets(config)}
+
+    assert "Generic Token Assignment" in kinds
+    assert "Generic Password Assignment" in kinds
 
 
 def test_env_example_inclusion(temp_project):
@@ -58,7 +96,7 @@ def test_env_example_exclusion_with_secret(temp_project):
     """Verifica que .env.example se excluya si tiene secretos."""
     env_ex = temp_project / ".env.example"
     # Usamos un secreto que dispare el escáner con total seguridad (concatenado para no dispararlo aquí)
-    env_ex.write_text("OPENAI_KEY=" + "sk" + "-12345678901234567890123456789012", encoding="utf-8")
+    env_ex.write_text("OPENAI_KEY=" + _fake_openai_key(), encoding="utf-8")
 
     zip_path = temp_project.parent / "test.zip"
     incl, ign, findings = create_zip(temp_project, zip_path, [], True)
@@ -203,9 +241,7 @@ def test_default_zip_stem_uses_project_and_hash_without_subject(temp_project):
 def test_force_inclusion_with_secret(temp_project):
     """Verifica que --force incluya archivos con secretos."""
     secret_file = temp_project / "secret.txt"
-    secret_file.write_text(
-        "OPENAI_KEY=" + "sk" + "-12345678901234567890123456789012", encoding="utf-8"
-    )
+    secret_file.write_text("OPENAI_KEY=" + _fake_openai_key(), encoding="utf-8")
 
     zip_path = temp_project.parent / "test_force.zip"
     # force=True
@@ -301,8 +337,10 @@ def test_binary_lockfile_is_included_without_relaxing_other_binary_policy(temp_p
 
 
 def test_large_clean_lockfile_is_scanned_and_included(temp_project):
-    content = '{"packages":{}}\n' + (" " * (1024 * 1024 + 1))
-    (temp_project / "package-lock.json").write_text(content, encoding="utf-8")
+    # Escribir bytes evita que Windows traduzca \n a \r\n y permite comprobar
+    # directamente la invariante: el ZIP conserva exactamente el archivo fuente.
+    content = b'{"packages":{}}\n' + (b" " * (1024 * 1024 + 1))
+    (temp_project / "package-lock.json").write_bytes(content)
 
     zip_path = temp_project.parent / "test_large_lock.zip"
     incl, ign, findings = create_zip(temp_project, zip_path, [], True)
@@ -311,11 +349,11 @@ def test_large_clean_lockfile_is_scanned_and_included(temp_project):
     assert ign == 0
     assert findings == []
     with zipfile.ZipFile(zip_path, "r") as archive:
-        assert archive.read("package-lock.json").decode("utf-8") == content
+        assert archive.read("package-lock.json") == content
 
 
 def test_lockfile_with_secret_still_requires_force(temp_project):
-    secret = "sk" + "-12345678901234567890123456789012"
+    secret = _fake_openai_key()
     (temp_project / "package-lock.json").write_text(
         '{"registryToken":"' + secret + '"}',
         encoding="utf-8",
@@ -384,7 +422,7 @@ def test_git_context_included_with_g(temp_project):
 def test_git_context_secret_excluded_without_force(temp_project):
     (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
     zip_path = temp_project.parent / "test.zip"
-    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+    markdown = f"OPENAI_KEY={_fake_openai_key()}"
 
     with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
         incl, ign, findings = create_zip(
@@ -399,7 +437,7 @@ def test_git_context_secret_excluded_without_force(temp_project):
 def test_git_context_secret_included_with_force(temp_project):
     (temp_project / "code.py").write_text("print('hello')", encoding="utf-8")
     zip_path = temp_project.parent / "test.zip"
-    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+    markdown = f"OPENAI_KEY={_fake_openai_key()}"
 
     with patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)):
         incl, ign, findings = create_zip(
@@ -631,7 +669,7 @@ def test_copy_git_context_to_clipboard_success():
 
 
 def test_copy_git_context_to_clipboard_blocks_secret_without_force():
-    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+    markdown = f"OPENAI_KEY={_fake_openai_key()}"
 
     with (
         patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)),
@@ -647,7 +685,7 @@ def test_copy_git_context_to_clipboard_blocks_secret_without_force():
 
 
 def test_copy_git_context_to_clipboard_allows_secret_with_force():
-    markdown = "OPENAI_KEY=sk-12345678901234567890123456789012"
+    markdown = f"OPENAI_KEY={_fake_openai_key()}"
 
     with (
         patch("pack_ai.build_git_context_markdown", return_value=(markdown, None)),

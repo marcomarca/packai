@@ -53,7 +53,7 @@ La versión 2.1 añade:
 - PDF e imágenes se validan por firma, pero no se inspecciona su contenido interno para secretos.
 - El conteo es exacto para `o200k_base`, pero sigue siendo una estimación del costo de un modelo concreto porque cada modelo puede aplicar otro encoding o envolver el contenido con tokens adicionales.
 - El fallback heurístico es deliberadamente aproximado y se marca como degradado.
-- La detección de secretos continúa basada en expresiones regulares.
+- La detección de secretos combina expresiones regulares de alta confianza con análisis conservador de asignaciones literales; sigue siendo heurística y puede requerir `--force` ante casos límite.
 - Una preview puede quedar obsoleta si los archivos cambian antes del pack; el pack siempre genera su propia instantánea actual.
 
 ## Verificación histórica de la iteración 2.1

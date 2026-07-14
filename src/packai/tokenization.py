@@ -97,7 +97,12 @@ def _read_bundled_encoding_data() -> bytes:
 
 
 def _parse_verified_o200k_data(data: bytes) -> dict[bytes, int]:
-    digest = hashlib.sha256(data).hexdigest()
+    # Git puede materializar recursos textuales con CRLF en Windows. El formato
+    # tiktoken es una secuencia de registros ASCII separados por líneas, por lo
+    # que la integridad se verifica sobre una representación canónica LF sin
+    # alterar los tokens ni los rangos.
+    canonical_data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    digest = hashlib.sha256(canonical_data).hexdigest()
     if digest != _O200K_DATA_SHA256:
         raise ValueError(
             "El vocabulario o200k_base incluido está ausente o corrupto "
@@ -106,7 +111,7 @@ def _parse_verified_o200k_data(data: bytes) -> dict[bytes, int]:
 
     ranks: dict[bytes, int] = {}
     try:
-        for line in data.splitlines():
+        for line in canonical_data.splitlines():
             if not line:
                 continue
             encoded_token, raw_rank = line.split()
