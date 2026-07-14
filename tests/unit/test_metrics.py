@@ -63,6 +63,11 @@ def test_pack_metrics_use_exact_archive_payload_and_include_safe_binary_assets(
     assert result.metrics.uncompressed_size == len(source_a + source_b + image + pdf)
     assert result.metrics.zip_size == output.stat().st_size
     assert result.metrics.estimated_tokens == 4
+    assert result.metrics.code_files == 1
+    assert result.metrics.code_lines == 1
+    assert [
+        (item.language, item.files, item.code_lines) for item in result.metrics.language_code_lines
+    ] == [("Python", 1, 1)]
     assert [item.relative_path for item in result.metrics.largest_token_files] == [
         "a.py",
         "b.md",
@@ -217,8 +222,50 @@ def test_cli_token_top_and_metrics_renderer(tmp_path: Path) -> None:
     rendered = render_pack_metrics(result.metrics)
     assert "Archivos incluidos:" in rendered
     assert "Tokens estimados:" in rendered
+    assert "Líneas de código:" in rendered
+    assert "Líneas de código por lenguaje:" in rendered
+    assert "Python" in rendered
     assert "Archivos con más tokens:" in rendered
     assert "main.py" in rendered
 
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--token-top", "-1", "."])
+
+
+def test_code_lines_are_non_empty_physical_lines_grouped_by_language(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "main.py").write_text(
+        "# comment\n\nvalue = 1\r\nprint(value)",
+        encoding="utf-8",
+    )
+    (root / "app.ts").write_text(
+        "// comment\n\nconst value = 1;\n",
+        encoding="utf-8",
+    )
+    (root / "Dockerfile").write_text(
+        "FROM python:3.12\n\nRUN echo ok\n",
+        encoding="utf-8",
+    )
+    (root / "README.md").write_text("# Not source code\n", encoding="utf-8")
+    (root / "run-tool").write_text(
+        "#!/usr/bin/env bash\n\necho ok\n",
+        encoding="utf-8",
+    )
+
+    result = PackService(token_estimator=WordTokenEstimator()).pack(
+        PackRequest(root=root, output_zip=tmp_path / "result.zip")
+    )
+
+    assert result.metrics is not None
+    assert result.metrics.text_files == 5
+    assert result.metrics.code_files == 4
+    assert result.metrics.code_lines == 9
+    assert [
+        (item.language, item.files, item.code_lines) for item in result.metrics.language_code_lines
+    ] == [
+        ("Python", 1, 3),
+        ("Dockerfile", 1, 2),
+        ("Shell", 1, 2),
+        ("TypeScript", 1, 2),
+    ]

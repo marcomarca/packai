@@ -83,6 +83,15 @@ class FileTokenMetrics:
 
 
 @dataclass(frozen=True, slots=True)
+class LanguageCodeMetrics:
+    """Physical non-empty source lines grouped by detected language."""
+
+    language: str
+    files: int
+    code_lines: int
+
+
+@dataclass(frozen=True, slots=True)
 class PackMetrics:
     """Ephemeral metrics calculated from the exact bytes selected for packing."""
 
@@ -97,6 +106,9 @@ class PackMetrics:
     degraded: bool
     complete: bool
     warnings: tuple[str, ...] = ()
+    code_files: int = 0
+    code_lines: int = 0
+    language_code_lines: tuple[LanguageCodeMetrics, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

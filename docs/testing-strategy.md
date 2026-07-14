@@ -13,7 +13,9 @@
 - contratos inmutables y neutrales respecto de UI;
 - eventos y exclusiones normalizadas;
 - preservación atómica de una salida anterior;
+- verificación integral del temporal antes del reemplazo y compresión DEFLATE;
 - métricas derivadas de los mismos bytes escritos;
+- LOC físico no vacío, detección por lenguaje y exclusión de documentación general;
 - preview sin creación de ZIP;
 - ranking configurable por tokens;
 - inclusión de imágenes y PDF con firma válida;
@@ -53,6 +55,7 @@ El umbral mínimo es 70%. No debe reducirse para ocultar una regresión.
 - Nuevo formato binario permitido: firma explícita, prueba positiva, prueba de extensión falsa y documentación de seguridad.
 - Nuevo tokenizador: implementación de `TokenEstimator`, pruebas deterministas y política de fallback.
 - Cambio de contrato público: ADR y prueba de contrato.
+- Nuevo lenguaje para LOC: extensión o nombre inequívoco, prueba de conteo y documentación de semántica.
 - Corrección de bug: reproducción mínima y prueba de regresión.
 - Nueva GUI: debe consumir `preview`/`pack`; no debe duplicar clasificación, métricas ni tokenización.
 - Cambio en selección jerárquica: prueba sobre exclusiones mínimas y comandos reproducibles.

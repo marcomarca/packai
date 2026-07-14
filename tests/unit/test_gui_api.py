@@ -37,6 +37,11 @@ def test_gui_bridge_initializes_tree_and_metrics(tmp_path: Path) -> None:
     assert tree_by_name["tests"]["total_size_bytes"] == len("def test_ok(): pass")
     preview = response["preview"]
     assert preview["metrics"]["included_files"] == 2
+    assert preview["metrics"]["code_files"] == 2
+    assert preview["metrics"]["code_lines"] == 2
+    assert preview["metrics"]["language_code_lines"] == [
+        {"language": "Python", "files": 2, "code_lines": 2}
+    ]
     assert response["commands"]["pack"].startswith("packai ")
 
 

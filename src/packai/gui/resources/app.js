@@ -489,10 +489,26 @@
       h('div', { className: 'metrics-grid' },
         h(MetricCard, { label: 'Tokens estimados', value: numberFormat.format(metrics.estimated_tokens), detail: metrics.tokenizer }),
         h(MetricCard, { label: 'Archivos incluidos', value: numberFormat.format(metrics.included_files), detail: metrics.text_files + ' texto · ' + metrics.binary_files + ' binarios' }),
+        h(MetricCard, { label: 'Líneas de código', value: numberFormat.format(metrics.code_lines || 0), detail: numberFormat.format(metrics.code_files || 0) + ' archivos de código' }),
         h(MetricCard, { label: 'Sin comprimir', value: formatSize(metrics.uncompressed_size), detail: 'Contenido seleccionado' }),
         h(MetricCard, { label: 'ZIP', value: formatSize(metrics.zip_size), detail: metrics.zip_size === null ? 'Disponible después de generar' : 'Última generación' })
       ),
       metrics.degraded ? h('div', { className: 'inline-warning' }, 'Estimación degradada mediante ' + metrics.tokenizer) : null,
+      metrics.language_code_lines && metrics.language_code_lines.length
+        ? h('div', null,
+            h('div', { className: 'section-heading' },
+              h('h3', null, 'Líneas por lenguaje'),
+              h('span', null, metrics.language_code_lines.length + ' lenguajes')
+            ),
+            h('div', { className: 'token-list' }, metrics.language_code_lines.slice(0, 12).map(function (item, index) {
+              return h('div', { className: 'token-row', key: item.language },
+                h('span', { className: 'rank' }, index + 1),
+                h('span', { className: 'token-path', title: item.files + ' archivos' }, item.language),
+                h('strong', null, numberFormat.format(item.code_lines))
+              );
+            }))
+          )
+        : null,
       h('div', { className: 'section-heading' },
         h('h3', null, 'Archivos con más tokens'),
         h('span', null, 'Top ' + this.state.options.token_top)

@@ -1,6 +1,6 @@
 [project]
 name = "pack-ai"
-version = "2.3.0"
+version = "2.4.0"
 description = "Package a project into a ZIP optimized for AI review while excluding common secrets and heavy files."
 readme = "README.md"
 requires-python = ">=3.12"

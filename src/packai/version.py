@@ -5,6 +5,6 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("pack-ai")
 except PackageNotFoundError:
-    __version__ = "2.3.0"
+    __version__ = "2.4.0"
 
 VERSION = __version__

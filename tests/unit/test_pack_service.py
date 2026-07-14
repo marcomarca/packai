@@ -100,6 +100,51 @@ def test_archive_creation_is_atomic_when_writing_fails(
     assert list(tmp_path.glob(".result.zip.*.tmp")) == []
 
 
+def test_archive_verification_failure_preserves_previous_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "main.py").write_text("print('ok')", encoding="utf-8")
+    output = tmp_path / "result.zip"
+    output.write_bytes(b"previous archive")
+
+    def fail_verification(*args: object, **kwargs: object) -> None:
+        raise zipfile.BadZipFile("simulated verification failure")
+
+    monkeypatch.setattr(ArchiveService, "_verify_archive", fail_verification)
+
+    with pytest.raises(ArchiveCreationError, match="simulated verification failure"):
+        ArchiveService().create_archive(
+            root=root,
+            output_zip=output,
+            ignore_patterns=(),
+            include_env_example=True,
+        )
+
+    assert output.read_bytes() == b"previous archive"
+    assert list(tmp_path.glob(".result.zip.*.tmp")) == []
+
+
+def test_created_archive_uses_deflate_and_passes_integrity_check(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "main.py").write_text("print('ok')\n" * 100, encoding="utf-8")
+    output = tmp_path / "result.zip"
+
+    ArchiveService().create_archive(
+        root=root,
+        output_zip=output,
+        ignore_patterns=(),
+        include_env_example=True,
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        assert archive.testzip() is None
+        assert archive.getinfo("main.py").compress_type == zipfile.ZIP_DEFLATED
+
+
 def test_pack_service_rejects_missing_root(tmp_path: Path) -> None:
     with pytest.raises(PackValidationError, match="no existe"):
         PackService().pack(

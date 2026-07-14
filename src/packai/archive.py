@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 import zipfile
+import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -139,6 +140,7 @@ class ArchiveService:
 
         try:
             self._write_plan(temporary_path, plan)
+            self._verify_archive(temporary_path, plan)
             os.replace(temporary_path, output_resolved)
         except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
             temporary_path.unlink(missing_ok=True)
@@ -430,9 +432,45 @@ class ArchiveService:
 
     @staticmethod
     def _write_plan(temporary_zip: Path, plan: ArchivePlan) -> None:
-        with zipfile.ZipFile(temporary_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        with zipfile.ZipFile(
+            temporary_zip,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=9,
+            allowZip64=True,
+            strict_timestamps=False,
+        ) as archive:
             for entry in plan.entries:
                 archive.writestr(entry.relative_path, entry.data)
+
+    @staticmethod
+    def _verify_archive(temporary_zip: Path, plan: ArchivePlan) -> None:
+        """Fully read and validate the temporary ZIP before atomic replacement."""
+        expected_names = [entry.relative_path for entry in plan.entries]
+        expected_data = {entry.relative_path: entry.data for entry in plan.entries}
+        with zipfile.ZipFile(temporary_zip, "r", allowZip64=True) as archive:
+            bad_member = archive.testzip()
+            if bad_member is not None:
+                raise zipfile.BadZipFile(f"CRC inválido en {bad_member}")
+
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            if len(set(names)) != len(names):
+                raise zipfile.BadZipFile("El ZIP contiene miembros duplicados.")
+            if names != expected_names:
+                raise zipfile.BadZipFile("Los miembros del ZIP no coinciden con el plan.")
+
+            for info in infos:
+                data = expected_data[info.filename]
+                expected_crc = zlib.crc32(data) & 0xFFFFFFFF
+                if info.compress_type != zipfile.ZIP_DEFLATED:
+                    raise zipfile.BadZipFile(
+                        f"Método de compresión inesperado para {info.filename}."
+                    )
+                if info.file_size != len(data) or expected_crc != info.CRC:
+                    raise zipfile.BadZipFile(f"Tamaño o CRC inesperado para {info.filename}.")
+                if archive.read(info) != data:
+                    raise zipfile.BadZipFile(f"Contenido inesperado para {info.filename}.")
 
     def _safe_analyze(
         self,

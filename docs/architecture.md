@@ -39,7 +39,7 @@ La dirección de dependencia apunta hacia contratos y políticas. El núcleo no 
 | `application.py` | Valida la petición y compone la política de exclusión. |
 | `archive.py` | Construye la instantánea, calcula métricas y escribe el ZIP atómicamente. |
 | `content.py` | Clasifica texto, activos binarios permitidos y firmas ejecutables sin modificar bytes. |
-| `metrics.py` | Agrega tamaños, conteos, tokens y ranking desde el plan exacto. |
+| `metrics.py` | Agrega tamaños, conteos, LOC por lenguaje, tokens y ranking desde el plan exacto. |
 | `tokenization.py` | Adaptador `tiktoken` offline, verificación del vocabulario y fallback heurístico degradado. |
 | `policy.py` | Reglas puras de rutas, nombres sensibles y secretos. |
 | `git.py` | Puerto y adaptador de Git; genera contexto de `HEAD`. |
@@ -54,7 +54,7 @@ La dirección de dependencia apunta hacia contratos y políticas. El núcleo no 
 
 ## Instantánea y fuente de verdad
 
-`ArchivePlan` conserva en memoria los bytes exactos seleccionados. La clasificación y el conteo pueden decodificar una vista textual, pero el writer recibe siempre los bytes originales. Esto impide que una codificación, un BOM o caracteres heredados sean alterados por el análisis.
+`ArchivePlan` conserva en memoria los bytes exactos seleccionados. La clasificación, el LOC y el conteo de tokens pueden decodificar una vista textual, pero el writer recibe siempre los bytes originales. El LOC cuenta líneas físicas no vacías en lenguajes reconocidos; incluye comentarios y excluye documentación general. Esto impide que una codificación, un BOM o caracteres heredados sean alterados por el análisis.
 
 `PackService.preview` devuelve `PackPreview` con `zip_size=None` y no crea archivos. `PackService.pack` calcula sobre otra instantánea actual y, después del reemplazo atómico, añade el tamaño físico del ZIP a `PackMetrics`.
 
@@ -82,7 +82,7 @@ La fachada `pack_ai.py` conserva las funciones usadas por pruebas y usuarios exi
 
 ## Consistencia de salida
 
-El ZIP se crea en un temporal ubicado en el mismo sistema de archivos que el destino. `os.replace` ocurre después del cierre exitoso. Un fallo de tokenización degrada la estimación; un fallo total de métricas emite advertencia, pero ninguno elimina un ZIP válido.
+El ZIP se crea con DEFLATE nivel 9 y ZIP64 en un temporal ubicado en el mismo sistema de archivos que el destino. Antes de `os.replace`, se relee todo el archivo, se ejecuta la verificación CRC y se comparan método, orden, nombres, tamaños, CRC y bytes contra `ArchivePlan`. Un fallo de tokenización degrada la estimación; un fallo total de métricas emite advertencia, pero ninguno elimina un ZIP válido.
 
 ## Flujo de la GUI
 

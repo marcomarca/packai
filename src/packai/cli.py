@@ -44,6 +44,8 @@ def render_pack_metrics(metrics: PackMetrics) -> str:
         ("Archivos incluidos", f"{metrics.included_files:,}"),
         ("Archivos de texto", f"{metrics.text_files:,}"),
         ("Archivos binarios", f"{metrics.binary_files:,}"),
+        ("Archivos de código", f"{metrics.code_files:,}"),
+        ("Líneas de código", f"{metrics.code_lines:,}"),
         ("Tamaño sin comprimir", format_size(metrics.uncompressed_size)),
         (
             "Tamaño del ZIP",
@@ -58,6 +60,14 @@ def render_pack_metrics(metrics: PackMetrics) -> str:
         lines.extend(("", f"⚠️  Estimación degradada: {metrics.tokenizer}"))
     for warning in metrics.warnings:
         lines.append(f"⚠️  {warning}")
+
+    if metrics.language_code_lines:
+        lines.extend(("", "Líneas de código por lenguaje:"))
+        language_width = max(len(item.language) for item in metrics.language_code_lines)
+        lines.extend(
+            f"  {item.language:<{language_width}}  {item.files:>5,} archivos  {item.code_lines:>12,} líneas"
+            for item in metrics.language_code_lines
+        )
 
     if metrics.largest_token_files:
         lines.extend(("", "Archivos con más tokens:"))

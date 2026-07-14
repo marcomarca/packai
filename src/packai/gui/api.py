@@ -178,7 +178,7 @@ class GuiBridge:
         copy_mode_raw = payload.get("copy_mode", self._initial.copy_mode)
         if copy_mode_raw not in {"file", "path", "none"}:
             raise PackValidationError("copy_mode debe ser file, path o none.")
-        copy_mode: CopyMode = copy_mode_raw
+        copy_mode = cast(CopyMode, copy_mode_raw)
 
         return (
             GuiLaunchOptions(
@@ -325,6 +325,8 @@ def _metrics_to_json(metrics: PackMetrics | None) -> JsonValue:
         "included_files": metrics.included_files,
         "text_files": metrics.text_files,
         "binary_files": metrics.binary_files,
+        "code_files": metrics.code_files,
+        "code_lines": metrics.code_lines,
         "uncompressed_size": metrics.uncompressed_size,
         "zip_size": metrics.zip_size,
         "estimated_tokens": metrics.estimated_tokens,
@@ -332,6 +334,14 @@ def _metrics_to_json(metrics: PackMetrics | None) -> JsonValue:
         "degraded": metrics.degraded,
         "complete": metrics.complete,
         "warnings": list(metrics.warnings),
+        "language_code_lines": [
+            {
+                "language": item.language,
+                "files": item.files,
+                "code_lines": item.code_lines,
+            }
+            for item in metrics.language_code_lines
+        ],
         "largest_token_files": [
             {
                 "relative_path": item.relative_path,

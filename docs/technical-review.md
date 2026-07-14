@@ -92,7 +92,7 @@ La GUI no persiste configuración, no elige una ruta de salida y no contiene reg
 - Reincorporar una rama bajo un ancestro excluido puede expandirse a varias exclusiones hermanas porque el contrato del CLI solo expresa carpetas excluidas.
 - React se distribuye como recurso estático y requiere una actualización consciente de versión, licencia y hashes.
 
-## Verificación actualizada de esta entrega
+## Verificación de la entrega 2.3
 
 - Ruff format/check: correcto en el proyecto completo.
 - mypy estricto: sin errores en 25 módulos de `src/packai`.
@@ -104,3 +104,22 @@ La GUI no persiste configuración, no elige una ruta de salida y no contiene reg
 - CLI: versión, parser heredado y ayuda de `packai gui` comprobados.
 - No se abrió una ventana nativa en este entorno Linux sin escritorio.
 - `uv.lock` no se incluye en el artefacto entregado.
+
+
+## Iteración 2.4: LOC y ZIP verificado
+
+- `PackMetrics` añade `code_files`, `code_lines` y `language_code_lines` con valores predeterminados para mantener compatibilidad con construcciones existentes.
+- El conteo usa líneas físicas no vacías y agrupa lenguajes por extensión, nombre convencional o shebang.
+- CLI y GUI muestran total de LOC, archivos de código y desglose por lenguaje; la API entrega la misma estructura serializable.
+- El escritor usa DEFLATE nivel 9, ZIP64 y verificación completa del temporal antes de `os.replace`.
+- Las pruebas de regresión cubren CRLF, líneas vacías, comentarios, varios lenguajes, archivos no fuente, compresión, CRC y preservación atómica ante fallo de verificación.
+
+## Verificación de la entrega 2.4
+
+- Ruff format/check: correcto en el proyecto completo.
+- mypy estricto: sin errores en 25 módulos de `src/packai`.
+- Pytest: 84 pruebas aprobadas.
+- Cobertura: 79.68%, con gate mínimo de 70%.
+- Sintaxis de `app.js`: validada con `node --check`.
+- Wheel y sdist 2.4.0: construidos correctamente y revisados durante el build.
+- Métrica del propio proyecto bajo su política normal: 35 archivos de código y 2,265 líneas físicas no vacías.

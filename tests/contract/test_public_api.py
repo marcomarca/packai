@@ -5,6 +5,7 @@ from pathlib import Path
 import pack_ai
 from packai import (
     FileTokenMetrics,
+    LanguageCodeMetrics,
     PackMetrics,
     PackPreview,
     PackRequest,
@@ -24,6 +25,7 @@ def test_new_public_api_exports_frontend_contracts() -> None:
     assert PackPreview.__module__ == "packai.contracts"
     assert PackMetrics.__module__ == "packai.contracts"
     assert FileTokenMetrics.__module__ == "packai.contracts"
+    assert LanguageCodeMetrics.__module__ == "packai.contracts"
     assert hasattr(TokenEstimator, "estimate")
 
 

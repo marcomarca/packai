@@ -1,6 +1,6 @@
 # Pack AI
 
-Pack AI empaqueta un proyecto en un ZIP orientado a revisión por herramientas de IA. Excluye rutas irrelevantes, ejecutables, binarios desconocidos y secretos detectables; puede agregar el contexto del último commit y reporta tamaño, archivos y tokens estimados.
+Pack AI empaqueta un proyecto en un ZIP orientado a revisión por herramientas de IA. Excluye rutas irrelevantes, ejecutables, binarios desconocidos y secretos detectables; puede agregar el contexto del último commit y reporta tamaño, archivos, líneas de código y tokens estimados.
 
 ## Arquitectura
 
@@ -56,7 +56,7 @@ La GUI incluye:
 - carpetas bloqueadas visibles pero deshabilitadas;
 - tamaño recursivo en disco por carpeta, formateado dinámicamente en B, KB, MB o GB;
 - `node_modules` y los demás subárboles bloqueados nunca se recorren ni se miden;
-- métricas reactivas de tokens, tamaño, texto, binarios y ranking;
+- métricas reactivas de tokens, tamaño, texto, binarios, líneas de código y desglose por lenguaje;
 - opciones `Force`, contexto Git, `.env.example`, ranking y portapapeles;
 - reescaneo por eventos con debounce y sondeo de baja frecuencia como fallback;
 - reescaneo obligatorio antes de cada generación;
@@ -105,15 +105,24 @@ Salida de referencia:
 Archivos incluidos:             284
 Archivos de texto:              251
 Archivos binarios:               33
+Archivos de código:               198
+Líneas de código:              42,817
 Tamaño sin comprimir:         4.8 MB
 Tamaño del ZIP:              1.2 MB
 Tokens estimados:          612,430
+
+Líneas de código por lenguaje:
+  TypeScript      84 archivos        21,340 líneas
+  Python          63 archivos        13,902 líneas
+  CSS             12 archivos         4,218 líneas
 
 Archivos con más tokens:
   src/generated/client.ts       184,220
   package-lock.json             102,845
   docs/api-reference.md          48,102
 ```
+
+El LOC representa líneas físicas no vacías de archivos fuente o declarativos reconocidos. Los comentarios cuentan; Markdown y texto general no. Esta definición evita fingir una precisión semántica que requeriría parsers específicos por lenguaje.
 
 Si `tiktoken` o el vocabulario local no pueden cargarse, el ZIP se crea igualmente y la salida marca una estimación degradada basada en bytes UTF-8.
 
@@ -132,7 +141,7 @@ El CLI tradicional también admite `--output` y `--commit-clipboard`. La GUI no 
 
 ## Texto, imágenes, PDF y ejecutables
 
-- El texto aporta cantidad de archivos, bytes y tokens.
+- El texto aporta cantidad de archivos, bytes y tokens. Los archivos fuente reconocidos aportan además LOC y desglose por lenguaje.
 - PNG, JPEG, GIF, WebP, BMP, TIFF, ICO, AVIF, HEIC/HEIF y PDF se incluyen por defecto solo cuando su firma coincide con el formato esperado.
 - Esos activos cuentan como binarios y aportan tamaño, pero no tokens.
 - Ejecutables, binarios desconocidos, multimedia y artefactos de compilación permanecen excluidos.
@@ -162,6 +171,8 @@ assert not request.output_zip.exists()
 result = PackService().pack(request)
 if result.metrics is not None:
     print(result.metrics.estimated_tokens)
+    print(result.metrics.code_lines)
+    print(result.metrics.language_code_lines)
     print(result.metrics.zip_size)
 ```
 
@@ -170,7 +181,7 @@ Contratos públicos relevantes:
 - `PackRequest`: configuración, exclusiones y `token_top`.
 - `PackPreview`: resultado precompresión sin artefacto físico.
 - `PackResult`: resultado final y ruta del ZIP.
-- `PackMetrics` y `FileTokenMetrics`: métricas neutrales respecto de UI.
+- `PackMetrics`, `FileTokenMetrics` y `LanguageCodeMetrics`: métricas neutrales respecto de UI.
 - `TokenEstimator`: puerto sustituible para otro encoding o proveedor.
 - `ProgressEvent`: eventos para árbol, barra, log o telemetría.
 - `GitContextProvider`: puerto sustituible para Git.
@@ -183,7 +194,7 @@ Un fallo total del análisis deja `metrics=None`, emite una advertencia y no inv
 - Los hallazgos se enmascaran antes de formar parte de resultados.
 - Los enlaces simbólicos no se siguen.
 - Las firmas ejecutables se bloquean aunque el archivo use una extensión de imagen.
-- El ZIP se construye en un temporal y reemplaza la salida solo después de cerrarse correctamente.
+- El ZIP usa DEFLATE nivel 9 y ZIP64; se relee por completo y verifica método, orden, CRC, nombres, tamaños y bytes antes del reemplazo atómico de la salida.
 - PDF e imágenes no se inspeccionan internamente para secretos; deben revisarse antes de compartir.
 - La detección por regex reduce riesgo, pero no garantiza ausencia de secretos.
 - Los recursos HTML, CSS, JavaScript y React de la GUI son locales; no existe CDN ni servidor HTTP.
@@ -205,5 +216,6 @@ Decisiones y contratos:
 - `docs/adr/0001-stable-application-contracts.md`
 - `docs/adr/0002-precompression-token-metrics.md`
 - `docs/adr/0003-local-pywebview-gui.md`
+- `docs/adr/0004-code-lines-and-verified-zip.md`
 - `CONTEXT.md`
 - `AI_SKILLS.md`
