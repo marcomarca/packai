@@ -28,6 +28,7 @@ from packai.metrics import ArchiveMetricsAnalyzer, MetricsEntry
 from packai.policy import (
     GIT_CONTEXT_FILENAME,
     MAX_SECRET_SCAN_BYTES,
+    is_lockfile_path,
     scan_text_for_secrets,
     should_ignore_path,
 )
@@ -67,6 +68,7 @@ class ArchiveService:
         output_zip: Path,
         ignore_patterns: Sequence[str],
         include_env_example: bool,
+        include_lockfiles: bool = True,
         force: bool = False,
         include_git_context: bool = False,
         exclude_dirs: Sequence[str] = (),
@@ -82,6 +84,7 @@ class ArchiveService:
             output_zip=output_resolved,
             ignore_patterns=tuple(ignore_patterns),
             include_env_example=include_env_example,
+            include_lockfiles=include_lockfiles,
             force=force,
             include_git_context=include_git_context,
             exclude_dirs=tuple(exclude_dirs),
@@ -104,6 +107,7 @@ class ArchiveService:
         output_zip: Path,
         ignore_patterns: Sequence[str],
         include_env_example: bool,
+        include_lockfiles: bool = True,
         force: bool = False,
         include_git_context: bool = False,
         exclude_dirs: Sequence[str] = (),
@@ -120,6 +124,7 @@ class ArchiveService:
             output_zip=output_resolved,
             ignore_patterns=tuple(ignore_patterns),
             include_env_example=include_env_example,
+            include_lockfiles=include_lockfiles,
             force=force,
             include_git_context=include_git_context,
             exclude_dirs=tuple(exclude_dirs),
@@ -177,6 +182,7 @@ class ArchiveService:
         output_zip: Path,
         ignore_patterns: tuple[str, ...],
         include_env_example: bool,
+        include_lockfiles: bool,
         force: bool,
         include_git_context: bool,
         exclude_dirs: tuple[str, ...],
@@ -198,6 +204,7 @@ class ArchiveService:
                     relative_directory,
                     ignore_patterns,
                     include_env_example,
+                    include_lockfiles=include_lockfiles,
                 )
                 if ignore_type in ("strict", "pattern") or directory_path.is_symlink():
                     ignored_count += 1
@@ -239,6 +246,7 @@ class ArchiveService:
                     relative_path,
                     ignore_patterns,
                     include_env_example,
+                    include_lockfiles=include_lockfiles,
                 )
                 if ignore_type in ("strict", "pattern"):
                     ignored_count += 1
@@ -263,22 +271,29 @@ class ArchiveService:
                     continue
 
                 classification = classify_content(path, data)
-                if classification.kind in {"unsupported_binary", "executable"}:
+                is_lockfile = include_lockfiles and is_lockfile_path(relative_path)
+                if classification.kind == "executable":
                     ignored_count += 1
-                    if classification.kind == "executable":
-                        self._emit(
-                            reporter,
-                            ProgressEvent(
-                                kind="warning",
-                                message=f"Ejecutable omitido: {relative_path}",
-                            ),
-                        )
+                    self._emit(
+                        reporter,
+                        ProgressEvent(
+                            kind="warning",
+                            message=f"Ejecutable omitido: {relative_path}",
+                        ),
+                    )
+                    continue
+                if classification.kind == "unsupported_binary" and not is_lockfile:
+                    ignored_count += 1
                     continue
 
                 file_findings: tuple[SecretFinding, ...] = ()
                 if classification.kind == "text":
                     assert classification.text is not None
-                    file_findings = self._scan_in_memory_text(classification.text, len(data))
+                    file_findings = (
+                        scan_text_for_secrets(classification.text)
+                        if is_lockfile
+                        else self._scan_in_memory_text(classification.text, len(data))
+                    )
                     if file_findings:
                         findings.append(
                             FileFinding(

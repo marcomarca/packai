@@ -29,6 +29,27 @@ def test_new_public_api_exports_frontend_contracts() -> None:
     assert hasattr(TokenEstimator, "estimate")
 
 
+def test_pack_request_preserves_legacy_positional_field_order(tmp_path: Path) -> None:
+    request = PackRequest(
+        tmp_path,
+        tmp_path / "result.zip",
+        False,
+        True,
+        True,
+        ("generated",),
+        ("*.tmp",),
+        7,
+    )
+
+    assert request.include_env_example is False
+    assert request.force is True
+    assert request.include_git_context is True
+    assert request.exclude_paths == ("generated",)
+    assert request.extra_ignore_patterns == ("*.tmp",)
+    assert request.token_top == 7
+    assert request.include_lockfiles is True
+
+
 def test_legacy_facade_preserves_existing_callable_surface(tmp_path: Path) -> None:
     required_callables = {
         "build_default_zip_stem",

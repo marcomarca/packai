@@ -20,3 +20,4 @@ class GuiLaunchOptions:
     include_env_example: bool = True
     token_top: int = 3
     copy_mode: CopyMode = "file"
+    include_lockfiles: bool = True

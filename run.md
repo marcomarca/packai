@@ -1,6 +1,6 @@
 # Comandos recomendados
 
-> Este ZIP no incluye ni modifica `uv.lock`. Integra los archivos y actualiza tu lockfile propio.
+> Pack AI incluye los lockfiles conocidos por defecto al empaquetar un proyecto. Este artefacto fuente puede no contener un `uv.lock` propio; genéralo si falta antes de usar `uv sync --locked`.
 
 ## Resolver dependencias
 
@@ -54,6 +54,7 @@ El resultado normal debe indicar `tiktoken:o200k_base` y `degraded=False`. El co
 ```bash
 uv run packai --version
 uv run packai . --copy none --token-top 10 --output ../pack-ai-smoke.zip
+uv run packai . --no-lockfiles --copy none --output ../pack-ai-smoke-no-lockfiles.zip
 ```
 
 ## Smoke test de la GUI
@@ -69,7 +70,7 @@ Prueba manual mínima:
 2. Verifica que `node_modules` aparezca bloqueado, sin tamaño, y que su contenido no afecte al tamaño del padre.
 3. Desmarca una carpeta y comprueba el estado indeterminado de su ancestro.
 4. Verifica que las métricas se recalculen.
-5. Activa y desactiva `Force` y contexto Git.
+5. Activa y desactiva `Force`, contexto Git e **Incluir lockfiles**; verifica que la métrica y el comando reproducible cambien y que el ZIP respete el interruptor.
 6. Crea o modifica un archivo y comprueba la actualización por eventos o sondeo.
 7. Pulsa `Generar ZIP` dos veces después de modificar el proyecto.
 8. Copia ambos comandos reproducibles y comprueba su sintaxis.

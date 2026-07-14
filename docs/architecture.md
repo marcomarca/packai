@@ -62,7 +62,7 @@ La dirección de dependencia apunta hacia contratos y políticas. El núcleo no 
 
 Una interfaz nueva debe:
 
-1. Construir `PackRequest`, incluido `token_top`.
+1. Construir `PackRequest`, incluidos `token_top` e `include_lockfiles`.
 2. Invocar `PackService.preview` para una previsualización sin compresión.
 3. Invocar `PackService.pack` para crear el artefacto final.
 4. Renderizar `ProgressEvent`, `PackMetrics` y errores sin asumir mensajes del CLI.
@@ -74,7 +74,9 @@ No debe importar `ConsoleReporter`, `argparse` ni funciones privadas de `archive
 
 El tokenizador exacto carga `packai.data/o200k_base.tiktoken` desde los recursos instalados y comprueba su SHA-256 antes de construir el encoder. No consulta red.
 
-Solo se admiten por defecto imágenes raster reconocidas y PDF con firma válida. Estos miembros cuentan como binarios, aportan tamaño y no aportan tokens. Ejecutables, binarios desconocidos, multimedia y formatos de compilación siguen excluidos. `.ignore2packai`, `extra_ignore_patterns` y las exclusiones CLI pueden retirar cualquier activo permitido.
+Solo se admiten por defecto imágenes raster reconocidas y PDF con firma válida. Estos miembros cuentan como binarios, aportan tamaño y no aportan tokens. Ejecutables, binarios desconocidos, multimedia y formatos de compilación siguen excluidos. Los lockfiles conocidos son una excepción deliberada: se incluyen por defecto, incluidos formatos binarios heredados como `bun.lockb`, y se retiran de forma uniforme con `include_lockfiles=False` o `--no-lockfiles`.
+
+El control de lockfiles tiene precedencia sobre patrones ordinarios de archivo para evitar que reglas antiguas como `*.lock` contradigan el estado visible de la GUI. Las exclusiones de carpetas siguen teniendo precedencia porque el subárbol ni siquiera se recorre. Los lockfiles textuales se escanean completos para detectar secretos; la opción no debilita la exclusión de `.env`, enlaces simbólicos ni firmas ejecutables.
 
 ## Compatibilidad
 

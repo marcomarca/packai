@@ -21,6 +21,8 @@
 - inclusión de imágenes y PDF con firma válida;
 - exclusión de ejecutables incluso con extensión engañosa;
 - preservación de bytes en codificaciones heredadas;
+- inclusión predeterminada de lockfiles textuales, grandes y binarios conocidos;
+- exclusión uniforme de lockfiles mediante `include_lockfiles=False` y `--no-lockfiles`;
 - fallback heurístico del tokenizador;
 - creación del ZIP aunque falle completamente el análisis de métricas;
 - árbol de carpetas con nodos bloqueados visibles y no recorridos;
@@ -60,6 +62,7 @@ El umbral mínimo es 70%. No debe reducirse para ocultar una regresión.
 - Nueva GUI: debe consumir `preview`/`pack`; no debe duplicar clasificación, métricas ni tokenización.
 - Cambio en selección jerárquica: prueba sobre exclusiones mínimas y comandos reproducibles.
 - Cambio en monitor: la corrección debe seguir dependiendo del reescaneo previo a `pack`, no de la entrega perfecta de eventos.
+- Nuevo lockfile reconocido: nombre o ruta convencional inequívoca, prueba de inclusión y cobertura del interruptor global.
 
 ### GUI manual
 
@@ -70,4 +73,4 @@ uv sync --locked --extra gui
 uv run packai gui .
 ```
 
-Comprobar: estados triestado, nodos bloqueados, actualización tras crear/eliminar carpetas, Force, contexto Git, copia de comandos y dos generaciones consecutivas después de modificar archivos. La CI no debe intentar abrir una ventana en un runner sin escritorio.
+Comprobar: estados triestado, nodos bloqueados, actualización tras crear/eliminar carpetas, Force, contexto Git, interruptor de lockfiles, copia de comandos y dos generaciones consecutivas después de modificar archivos. La CI no debe intentar abrir una ventana en un runner sin escritorio.

@@ -123,6 +123,7 @@ class PackRequest:
     exclude_paths: tuple[str, ...] = ()
     extra_ignore_patterns: tuple[str, ...] = ()
     token_top: int = 3
+    include_lockfiles: bool = True
 
 
 @dataclass(frozen=True, slots=True)

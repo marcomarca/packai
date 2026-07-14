@@ -15,7 +15,4 @@ backups/
 *.psd
 *.iso
 
-uv.lock
-
-bun.lock
-package-lock.json
+# Los lockfiles conocidos se controlan con --lockfiles / --no-lockfiles.

@@ -252,6 +252,7 @@
       force: state.options.force,
       include_git_context: state.options.include_git_context,
       include_env_example: state.options.include_env_example,
+      include_lockfiles: state.options.include_lockfiles,
       token_top: Number(state.options.token_top),
       copy_mode: state.options.copy_mode
     };
@@ -273,6 +274,7 @@
         force: false,
         include_git_context: false,
         include_env_example: true,
+        include_lockfiles: true,
         token_top: 3,
         copy_mode: 'file'
       },
@@ -646,6 +648,13 @@
               help: 'Los ejemplos se escanean antes de incluirse.',
               disabled: locked,
               onChange: function (value) { self.setOption('include_env_example', value); }
+            }),
+            h(Toggle, {
+              checked: this.state.options.include_lockfiles,
+              label: 'Incluir lockfiles',
+              help: 'Incluye uv.lock, bun.lock, package-lock.json y lockfiles conocidos.',
+              disabled: locked,
+              onChange: function (value) { self.setOption('include_lockfiles', value); }
             }),
             h('div', { className: 'field-row' },
               h('label', null, 'Ranking de tokens'),

@@ -23,7 +23,7 @@ El proyecto ofrece tres superficies sobre el mismo núcleo:
 
 El vocabulario `o200k_base` se distribuye dentro del paquete y se verifica mediante SHA-256. El conteo preciso no necesita red ni una caché previa de `tiktoken`.
 
-Este paquete no incluye `uv.lock`. Después de integrar los cambios en un repositorio con lockfile propio:
+El artefacto fuente puede no traer un `uv.lock` propio. Si falta en tu checkout, genéralo antes de sincronizar dependencias:
 
 ```bash
 pyenv install -s 3.12.10
@@ -57,7 +57,7 @@ La GUI incluye:
 - tamaño recursivo en disco por carpeta, formateado dinámicamente en B, KB, MB o GB;
 - `node_modules` y los demás subárboles bloqueados nunca se recorren ni se miden;
 - métricas reactivas de tokens, tamaño, texto, binarios, líneas de código y desglose por lenguaje;
-- opciones `Force`, contexto Git, `.env.example`, ranking y portapapeles;
+- opciones `Force`, contexto Git, `.env.example`, lockfiles, ranking y portapapeles;
 - reescaneo por eventos con debounce y sondeo de baja frecuencia como fallback;
 - reescaneo obligatorio antes de cada generación;
 - comandos reproducibles para empaquetar directamente o reabrir la selección;
@@ -97,6 +97,16 @@ uv run packai . --output ..\proyecto.zip -e datos -e cache/tmp --copy none
 
 # Agregar el diff del último commit confirmado
 uv run packai . -g
+
+# Los lockfiles conocidos se incluyen por defecto
+uv run packai .
+
+# Excluir todos los lockfiles conocidos en esta ejecución
+uv run packai . --no-lockfiles
+
+# Volver a incluirlos aunque la configuración local tenga otro valor
+uv run packai . --lockfiles
+
 ```
 
 Salida de referencia:
@@ -136,15 +146,18 @@ Si `tiktoken` o el vocabulario local no pueden cargarse, el ZIP se crea igualmen
 | `--token-top N` | Cantidad de archivos con más tokens; `0` oculta el ranking. |
 | `-g` | Incluye `git--diff_last_commit.md` y sus tokens. |
 | `--no-env-example` | Excluye `.env.example`, `.env.sample` y `.env.template`. |
+| `--lockfiles` / `--no-lockfiles` | Incluye o excluye en bloque los lockfiles conocidos. Se incluyen por defecto. |
 
 El CLI tradicional también admite `--output` y `--commit-clipboard`. La GUI no permite cambiar la salida y no ofrece el modo exclusivo de copiar contexto Git.
+
+El valor persistente puede cambiarse en `config_pack_ai.py` mediante `INCLUDE_LOCKFILES`. Los flags `--lockfiles` y `--no-lockfiles` siempre permiten invertirlo para una ejecución concreta.
 
 ## Texto, imágenes, PDF y ejecutables
 
 - El texto aporta cantidad de archivos, bytes y tokens. Los archivos fuente reconocidos aportan además LOC y desglose por lenguaje.
 - PNG, JPEG, GIF, WebP, BMP, TIFF, ICO, AVIF, HEIC/HEIF y PDF se incluyen por defecto solo cuando su firma coincide con el formato esperado.
 - Esos activos cuentan como binarios y aportan tamaño, pero no tokens.
-- Ejecutables, binarios desconocidos, multimedia y artefactos de compilación permanecen excluidos.
+- Ejecutables, binarios desconocidos, multimedia y artefactos de compilación permanecen excluidos; los lockfiles binarios conocidos, como `bun.lockb`, son la excepción explícita.
 - Cualquier imagen o PDF puede excluirse mediante `.ignore2packai`, `extra_ignore_patterns` o una exclusión aplicable.
 - SVG continúa tratándose como texto porque puede contener código, scripts y secretos.
 
@@ -161,6 +174,7 @@ request = PackRequest(
     root=Path("mi-proyecto"),
     output_zip=Path("mi-proyecto.zip"),
     include_git_context=True,
+    include_lockfiles=True,
     token_top=10,
 )
 
@@ -178,7 +192,7 @@ if result.metrics is not None:
 
 Contratos públicos relevantes:
 
-- `PackRequest`: configuración, exclusiones y `token_top`.
+- `PackRequest`: configuración, exclusiones, control de lockfiles y `token_top`.
 - `PackPreview`: resultado precompresión sin artefacto físico.
 - `PackResult`: resultado final y ruta del ZIP.
 - `PackMetrics`, `FileTokenMetrics` y `LanguageCodeMetrics`: métricas neutrales respecto de UI.
@@ -190,7 +204,10 @@ Un fallo total del análisis deja `metrics=None`, emite una advertencia y no inv
 
 ## Seguridad y consistencia
 
-- `.env`, `.env.*`, `bun.lock`, `uv.lock` y demás exclusiones estrictas se omiten incluso con `--force`.
+- `.env` y `.env.*` siguen siendo exclusiones estrictas y se omiten incluso con `--force`.
+- Los lockfiles conocidos (`uv.lock`, `bun.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock` y otros) se incluyen por defecto, aunque una regla antigua como `*.lock` siga presente en `.ignore2packai`.
+- `--no-lockfiles` o el interruptor de la GUI los retira en bloque; `--lockfiles` los vuelve a activar explícitamente.
+- Los lockfiles textuales se escanean completos en busca de secretos, incluso cuando superan el límite normal de escaneo; un hallazgo real conserva la política de bloqueo o `--force`. Los lockfiles binarios reconocidos, como `bun.lockb`, se conservan sin inspección interna.
 - Los hallazgos se enmascaran antes de formar parte de resultados.
 - Los enlaces simbólicos no se siguen.
 - Las firmas ejecutables se bloquean aunque el archivo use una extensión de imagen.

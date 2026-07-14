@@ -18,6 +18,7 @@ def test_gui_commands_reproduce_selection_without_output_override(
         force=True,
         include_git_context=True,
         include_env_example=False,
+        include_lockfiles=False,
         token_top=10,
         copy_mode="none",
     )
@@ -32,6 +33,7 @@ def test_gui_commands_reproduce_selection_without_output_override(
         assert "--force" in command
         assert " -g" in command
         assert "--no-env-example" in command
+        assert "--no-lockfiles" in command
         assert "--token-top 10" in command
         assert "--copy none" in command
         assert "--output" not in command

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from packai.application import PackService
 from packai.clipboard import copy_text_to_clipboard, copy_zip
-from packai.config import INCLUDE_ENV_EXAMPLE
+from packai.config import INCLUDE_ENV_EXAMPLE, INCLUDE_LOCKFILES
 from packai.contracts import FileFinding, PackMetrics, PackRequest, ProgressEvent
 from packai.errors import PackAIError, PackValidationError
 from packai.git import SubprocessGitContextProvider
@@ -136,6 +136,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="No incluir archivos .env.example.",
     )
     parser.add_argument(
+        "--lockfiles",
+        action=argparse.BooleanOptionalAction,
+        default=INCLUDE_LOCKFILES,
+        help="Incluye lockfiles conocidos; usa --no-lockfiles para excluirlos.",
+    )
+    parser.add_argument(
         "--token-top",
         type=_non_negative_int,
         default=3,
@@ -191,6 +197,12 @@ def build_gui_parser() -> argparse.ArgumentParser:
         help="No incluir archivos .env.example.",
     )
     parser.add_argument(
+        "--lockfiles",
+        action=argparse.BooleanOptionalAction,
+        default=INCLUDE_LOCKFILES,
+        help="Incluye lockfiles conocidos; usa --no-lockfiles para excluirlos.",
+    )
+    parser.add_argument(
         "--token-top",
         type=_non_negative_int,
         default=3,
@@ -224,6 +236,7 @@ def _main_gui(argv: list[str]) -> int:
             force=args.force,
             include_git_context=args.include_git_context,
             include_env_example=args.include_env_example,
+            include_lockfiles=args.lockfiles,
             token_top=args.token_top,
             copy_mode=args.copy,
         )
@@ -330,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
                 root=root,
                 output_zip=output_zip,
                 include_env_example=args.include_env_example,
+                include_lockfiles=args.lockfiles,
                 force=args.force,
                 include_git_context=args.include_git_context,
                 exclude_paths=tuple(args.exclude_paths),

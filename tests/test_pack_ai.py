@@ -233,42 +233,108 @@ def test_strict_env_exclusion_even_with_force(temp_project):
         assert ".env" not in z.namelist()
 
 
-def test_bun_lock_excluded_even_with_force(temp_project):
-    """Verifica que bun.lock se excluya siempre, también en subdirectorios."""
+def test_lockfiles_are_included_by_default_even_when_ignored_by_pattern(temp_project):
+    """Los lockfiles conocidos prevalecen sobre reglas antiguas de ignore."""
     (temp_project / "bun.lock").write_text("root lock", encoding="utf-8")
     nested = temp_project / "frontend"
     nested.mkdir()
-    (nested / "bun.lock").write_text("nested lock", encoding="utf-8")
+    (nested / "package-lock.json").write_text('{"lockfileVersion": 3}', encoding="utf-8")
 
     zip_path = temp_project.parent / "test_bun_lock.zip"
-    incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=True)
+    incl, ign, findings = create_zip(
+        temp_project,
+        zip_path,
+        ["bun.lock", "package-lock.json", "*.lock"],
+        True,
+    )
 
-    assert incl == 0
-    assert ign >= 2
+    assert incl == 2
+    assert ign == 0
     assert findings == []
     with zipfile.ZipFile(zip_path, "r") as z:
         names = z.namelist()
-        assert "bun.lock" not in names
-        assert "frontend/bun.lock" not in names
+        assert "bun.lock" in names
+        assert "frontend/package-lock.json" in names
 
 
-def test_uv_lock_excluded_even_with_force(temp_project):
-    """Verifica que uv.lock se excluya siempre, también en subdirectorios."""
+def test_lockfiles_can_be_excluded_with_single_switch(temp_project):
+    """El modo sin lockfiles se aplica en raíz y subdirectorios."""
     (temp_project / "uv.lock").write_text("root lock", encoding="utf-8")
     nested = temp_project / "backend"
     nested.mkdir()
     (nested / "uv.lock").write_text("nested lock", encoding="utf-8")
+    (temp_project / "main.py").write_text("print('ok')", encoding="utf-8")
 
     zip_path = temp_project.parent / "test_uv_lock.zip"
-    incl, ign, findings = create_zip(temp_project, zip_path, [], True, force=True)
+    incl, ign, findings = create_zip(
+        temp_project,
+        zip_path,
+        [],
+        True,
+        force=True,
+        include_lockfiles=False,
+    )
 
-    assert incl == 0
+    assert incl == 1
     assert ign >= 2
     assert findings == []
     with zipfile.ZipFile(zip_path, "r") as z:
         names = z.namelist()
+        assert "main.py" in names
         assert "uv.lock" not in names
         assert "backend/uv.lock" not in names
+
+
+def test_binary_lockfile_is_included_without_relaxing_other_binary_policy(temp_project):
+    (temp_project / "bun.lockb").write_bytes(b"BUN\x00LOCK\x01")
+    (temp_project / "unknown.bin").write_bytes(b"DATA\x00BINARY")
+
+    zip_path = temp_project.parent / "test_binary_lock.zip"
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True)
+
+    assert incl == 1
+    assert ign == 1
+    assert findings == []
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        assert archive.read("bun.lockb") == b"BUN\x00LOCK\x01"
+        assert "unknown.bin" not in archive.namelist()
+
+
+def test_large_clean_lockfile_is_scanned_and_included(temp_project):
+    content = '{"packages":{}}\n' + (" " * (1024 * 1024 + 1))
+    (temp_project / "package-lock.json").write_text(content, encoding="utf-8")
+
+    zip_path = temp_project.parent / "test_large_lock.zip"
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True)
+
+    assert incl == 1
+    assert ign == 0
+    assert findings == []
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        assert archive.read("package-lock.json").decode("utf-8") == content
+
+
+def test_lockfile_with_secret_still_requires_force(temp_project):
+    secret = "sk" + "-12345678901234567890123456789012"
+    (temp_project / "package-lock.json").write_text(
+        '{"registryToken":"' + secret + '"}',
+        encoding="utf-8",
+    )
+    zip_path = temp_project.parent / "test_lock_secret.zip"
+
+    incl, ign, findings = create_zip(temp_project, zip_path, [], True)
+
+    assert incl == 0
+    assert ign == 1
+    assert findings[0]["forced"] is False
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        assert "package-lock.json" not in archive.namelist()
+
+
+def test_cli_lockfile_flags_form_a_boolean_pair(temp_project):
+    assert build_parser().parse_args([str(temp_project)]).lockfiles is True
+    assert build_parser().parse_args([str(temp_project), "--no-lockfiles"]).lockfiles is False
+    assert build_parser().parse_args([str(temp_project), "--lockfiles"]).lockfiles is True
 
 
 def test_sensitive_filename_forced(temp_project):
@@ -593,6 +659,14 @@ def test_copy_git_context_to_clipboard_allows_secret_with_force():
     assert len(findings) == 1
     assert findings[0]["forced"] is True
     mock_copy.assert_called_once_with(markdown)
+
+
+def test_argparse_lockfiles_are_enabled_by_default_and_easy_to_disable():
+    parser = build_parser()
+
+    assert parser.parse_args(["."]).lockfiles is True
+    assert parser.parse_args([".", "--no-lockfiles"]).lockfiles is False
+    assert parser.parse_args([".", "--lockfiles"]).lockfiles is True
 
 
 def test_argparse_exclude_paths_repeated_and_aliases():

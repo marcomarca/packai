@@ -138,6 +138,7 @@ class GuiBridge:
             options.force,
             options.include_git_context,
             options.include_env_example,
+            options.include_lockfiles,
             options.token_top,
         )
         cached = self._preview_cache.get(key)
@@ -172,13 +173,18 @@ class GuiBridge:
             "include_env_example",
             self._initial.include_env_example,
         )
+        include_lockfiles = _bool_value(
+            payload,
+            "include_lockfiles",
+            self._initial.include_lockfiles,
+        )
         token_top = _int_value(payload, "token_top", self._initial.token_top)
         if token_top < 0 or token_top > 100:
             raise PackValidationError("token_top debe estar entre 0 y 100.")
         copy_mode_raw = payload.get("copy_mode", self._initial.copy_mode)
         if copy_mode_raw not in {"file", "path", "none"}:
             raise PackValidationError("copy_mode debe ser file, path o none.")
-        copy_mode = cast(CopyMode, copy_mode_raw)
+        copy_mode: CopyMode = copy_mode_raw
 
         return (
             GuiLaunchOptions(
@@ -187,6 +193,7 @@ class GuiBridge:
                 force=force,
                 include_git_context=include_git,
                 include_env_example=include_env,
+                include_lockfiles=include_lockfiles,
                 token_top=token_top,
                 copy_mode=copy_mode,
             ),
@@ -217,6 +224,7 @@ class GuiBridge:
             root=options.root,
             output_zip=output_zip,
             include_env_example=options.include_env_example,
+            include_lockfiles=options.include_lockfiles,
             force=options.force,
             include_git_context=options.include_git_context,
             exclude_paths=excluded,
@@ -234,6 +242,7 @@ class GuiBridge:
             "force": options.force,
             "include_git_context": options.include_git_context,
             "include_env_example": options.include_env_example,
+            "include_lockfiles": options.include_lockfiles,
             "token_top": options.token_top,
             "copy_mode": options.copy_mode,
         }
@@ -300,6 +309,7 @@ def _options_to_json(options: GuiLaunchOptions) -> JsonObject:
         "force": options.force,
         "include_git_context": options.include_git_context,
         "include_env_example": options.include_env_example,
+        "include_lockfiles": options.include_lockfiles,
         "token_top": options.token_top,
         "copy_mode": options.copy_mode,
     }

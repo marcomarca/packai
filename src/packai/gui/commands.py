@@ -7,6 +7,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
+from packai.config import INCLUDE_LOCKFILES
 from packai.gui.contracts import GuiLaunchOptions
 
 
@@ -32,6 +33,8 @@ def _common_arguments(options: GuiLaunchOptions, exclude_paths: tuple[str, ...])
         arguments.append("-g")
     if not options.include_env_example:
         arguments.append("--no-env-example")
+    if options.include_lockfiles != INCLUDE_LOCKFILES:
+        arguments.append("--lockfiles" if options.include_lockfiles else "--no-lockfiles")
     if options.token_top != 3:
         arguments.extend(("--token-top", str(options.token_top)))
     return arguments

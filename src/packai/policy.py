@@ -75,9 +75,67 @@ STRICT_EXCLUDE_PATTERNS = [
     ".env.*",
     "**/.env",
     "**/.env.*",
-    "bun.lock",
-    "uv.lock",
 ]
+
+# Lockfiles are valuable dependency context and are included by default. The
+# list is centralized so CLI, GUI, archive planning, and tests share exactly the
+# same definition. Path patterns cover ecosystems whose lockfiles live in a
+# conventional nested directory rather than at a project root.
+LOCKFILE_NAMES = frozenset(
+    {
+        ".terraform.lock.hcl",
+        "bun.lock",
+        "bun.lockb",
+        "cabal.project.freeze",
+        "Cargo.lock",
+        "Cartfile.resolved",
+        "Chart.lock",
+        "composer.lock",
+        "conan.lock",
+        "conda-lock.yaml",
+        "conda-lock.yml",
+        "deno.lock",
+        "devenv.lock",
+        "devbox.lock",
+        "flake.lock",
+        "Gemfile.lock",
+        "go.sum",
+        "go.work.sum",
+        "gradle.lockfile",
+        "helmfile.lock",
+        "Manifest.toml",
+        "mix.lock",
+        "npm-shrinkwrap.json",
+        "package-lock.json",
+        "Package.resolved",
+        "packages.lock.json",
+        "paket.lock",
+        "pdm.lock",
+        "Pipfile.lock",
+        "pixi.lock",
+        "pnpm-lock.yaml",
+        "pnpm-lock.yml",
+        "Podfile.lock",
+        "poetry.lock",
+        "pubspec.lock",
+        "pylock.toml",
+        "renv.lock",
+        "requirements-dev.lock",
+        "requirements.lock",
+        "shrinkwrap.yaml",
+        "spago.lock",
+        "stack.yaml.lock",
+        "uv.lock",
+        "vcpkg-lock.json",
+        "yarn.lock",
+    }
+)
+LOCKFILE_PATH_PATTERNS = (
+    "gradle/dependency-locks/*.lockfile",
+    "**/gradle/dependency-locks/*.lockfile",
+)
+
+LOCKFILE_NAME_KEYS = frozenset(name.casefold() for name in LOCKFILE_NAMES)
 
 SECRET_FILE_PATTERNS = [
     ".env",
@@ -259,6 +317,18 @@ def matches_any_path_pattern(relative_path: str, patterns: list[str]) -> bool:
     )
 
 
+def is_lockfile_path(relative_path: str) -> bool:
+    """Return whether a project-relative path is a recognized dependency lockfile."""
+    normalized = relative_path.replace("\\", "/").rstrip("/")
+    if not normalized:
+        return False
+    name = Path(normalized).name.casefold()
+    normalized_key = normalized.casefold()
+    return name in LOCKFILE_NAME_KEYS or any(
+        fnmatch.fnmatch(normalized_key, pattern.casefold()) for pattern in LOCKFILE_PATH_PATTERNS
+    )
+
+
 def normalize_cli_exclude_paths(
     root: Path, exclude_paths: list[str] | tuple[str, ...]
 ) -> list[str]:
@@ -331,6 +401,7 @@ def should_ignore_path(
     patterns: list[str] | tuple[str, ...],
     include_env_example: bool = True,
     ignore_secrets: bool = False,
+    include_lockfiles: bool = True,
 ) -> str | None:
     """Classify a path as strict, sensitive, pattern-based, or included."""
     normalized = relative_path.replace("\\", "/")
@@ -346,6 +417,13 @@ def should_ignore_path(
     is_safe_env = include_env_example and name in SAFE_ENV_EXAMPLES
     if not is_safe_env and matches_any_path_pattern(normalized, STRICT_EXCLUDE_PATTERNS):
         return "strict"
+
+    is_lockfile = not is_dir_path and is_lockfile_path(normalized)
+    if is_lockfile:
+        # This dedicated switch intentionally takes precedence over ordinary
+        # ignore patterns. Otherwise a stale ``.ignore2packai`` entry or a
+        # broad ``*.lock`` rule would make the GUI toggle misleading.
+        return None if include_lockfiles else "pattern"
 
     if not is_safe_env:
         if name == ".env" or fnmatch.fnmatch(name, ".env.*") or fnmatch.fnmatch(name, "*.env"):

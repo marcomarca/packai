@@ -29,6 +29,7 @@ def test_gui_command_dispatches_without_changing_legacy_parser(
             "-g",
             "--copy",
             "none",
+            "--no-lockfiles",
             "--token-top",
             "10",
         ]
@@ -42,6 +43,7 @@ def test_gui_command_dispatches_without_changing_legacy_parser(
             force=True,
             include_git_context=True,
             include_env_example=True,
+            include_lockfiles=False,
             token_top=10,
             copy_mode="none",
         )

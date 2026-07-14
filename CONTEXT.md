@@ -14,6 +14,7 @@ Pack AI transforma el contenido permitido de una carpeta en un ZIP revisable por
 | Archivo textual | Miembro decodificable de forma segura que aporta tokens. |
 | Activo binario | Imagen raster o PDF reconocido; aporta tamaño, no tokens. |
 | Exclusión estricta | Ruta que nunca se incluye, incluso con `force`. |
+| Lockfile | Archivo reproducible de resolución de dependencias, incluido por defecto y retirable como grupo. |
 | Ruta sensible | Archivo excluido por nombre salvo que `force` lo permita. |
 | Hallazgo | Detección enmascarada asociada a un archivo o al contexto Git. |
 | Contexto Git | Markdown derivado exclusivamente del último commit confirmado. |
@@ -35,6 +36,7 @@ Pack AI transforma el contenido permitido de una carpeta en un ZIP revisable por
 10. El análisis nunca recodifica ni modifica el contenido archivado.
 11. Los activos binarios permitidos no aportan tokens.
 12. Un fallo de métricas no invalida un ZIP correctamente creado.
+13. Los lockfiles conocidos se incluyen por defecto y un único cambio de opción debe excluirlos en CLI, GUI y API.
 
 ## Flujo de preview
 

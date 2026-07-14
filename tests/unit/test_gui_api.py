@@ -13,6 +13,7 @@ def _payload(**overrides: object) -> dict[str, object]:
         "force": False,
         "include_git_context": False,
         "include_env_example": True,
+        "include_lockfiles": True,
         "token_top": 3,
         "copy_mode": "none",
     }
@@ -113,3 +114,23 @@ def test_gui_bridge_drops_stale_exclusions_after_folder_is_removed(tmp_path: Pat
 
     assert response["ok"] is True
     assert response["excluded_paths"] == []
+
+
+def test_gui_bridge_toggles_lockfiles_and_renders_reproducible_command(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "uv.lock").write_text("version = 1", encoding="utf-8")
+    (root / "main.py").write_text("print('ok')", encoding="utf-8")
+    bridge = GuiBridge(GuiLaunchOptions(root=root, copy_mode="none"))
+
+    included = bridge.preview(_payload(include_lockfiles=True))
+    excluded = bridge.preview(_payload(include_lockfiles=False))
+
+    assert included["preview"]["metrics"]["included_files"] == 2
+    assert excluded["preview"]["metrics"]["included_files"] == 1
+    assert excluded["options"]["include_lockfiles"] is False
+    assert "--no-lockfiles" in excluded["commands"]["pack"]
+
+    packed = bridge.pack(_payload(include_lockfiles=False))
+    with zipfile.ZipFile(Path(packed["output_zip"])) as archive:
+        assert archive.namelist() == ["main.py"]

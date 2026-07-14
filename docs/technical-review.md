@@ -43,8 +43,9 @@ La versión 2.1 añade:
 6. Los binarios permitidos aportan cantidad y tamaño, pero no tokens.
 7. Ejecutables y binarios desconocidos no se incluyen ni con `force`.
 8. `.env` y variantes reales permanecen como exclusión estricta.
-9. Los hallazgos contienen valores enmascarados.
-10. La salida anterior se conserva ante fallos previos a `os.replace`.
+9. Los lockfiles conocidos se incluyen por defecto y una única opción compartida por CLI, GUI y API puede excluirlos.
+10. Los hallazgos contienen valores enmascarados.
+11. La salida anterior se conserva ante fallos previos a `os.replace`.
 
 ## Riesgos residuales
 
@@ -123,3 +124,13 @@ La GUI no persiste configuración, no elige una ruta de salida y no contiene reg
 - Sintaxis de `app.js`: validada con `node --check`.
 - Wheel y sdist 2.4.0: construidos correctamente y revisados durante el build.
 - Métrica del propio proyecto bajo su política normal: 35 archivos de código y 2,265 líneas físicas no vacías.
+
+
+## Política de lockfiles
+
+- La lista de nombres reconocidos está centralizada en `packai.policy`; no se usa un patrón genérico `*.lock` que pueda capturar archivos ajenos a gestores de dependencias.
+- `PackRequest.include_lockfiles` vale `True` por defecto y se propaga sin duplicar reglas a `ArchiveService`.
+- CLI y GUI exponen `--lockfiles` / `--no-lockfiles`; la GUI añade un interruptor y genera comandos reproducibles con `--no-lockfiles` cuando corresponde.
+- La decisión específica de lockfiles prevalece sobre patrones antiguos de `.ignore2packai`, evitando que configuraciones heredadas hagan que el interruptor parezca no funcionar.
+- Los lockfiles textuales mantienen el escaneo de secretos. Los lockfiles binarios reconocidos se permiten sin relajar la política para otros binarios desconocidos.
+- El nuevo campo se añadió al final de `PackRequest` para no desplazar los argumentos posicionales existentes.
